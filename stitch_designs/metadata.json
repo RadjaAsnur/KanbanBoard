@@ -1,0 +1,83 @@
+[
+  {
+    "index": "1",
+    "title": "CampusSprint - Login & Welcome",
+    "id": "f092043b904e4a66b091ee6b67076752",
+    "slug": "01_campussprint_login_and_welcome",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "1768"
+  },
+  {
+    "index": "2",
+    "title": "CampusSprint - Create Account",
+    "id": "df6d39d78a8f4f8d8c71fd777d4036f6",
+    "slug": "02_campussprint_create_account",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "2184"
+  },
+  {
+    "index": "3",
+    "title": "CampusSprint - Main Board (First Time User)",
+    "id": "845f4d0f17464f20b3ff52c413a77cfd",
+    "slug": "03_campussprint_main_board_(first_time_user)",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "2768"
+  },
+  {
+    "index": "4",
+    "title": "CampusSprint - Mobile-First Kanban Board",
+    "id": "e6adff02307c4a97ba4e4023e50946cd",
+    "slug": "04_campussprint_mobilefirst_kanban_board",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "1768"
+  },
+  {
+    "index": "5",
+    "title": "Product & Sprint Backlog",
+    "id": "bb12b5e981f947ec8ae4b15885273255",
+    "slug": "05_product_and_sprint_backlog",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "3862"
+  },
+  {
+    "index": "6",
+    "title": "CampusSprint - New Task Modal",
+    "id": "aea7c1dda39c41b59b0032393888e77b",
+    "slug": "06_campussprint_new_task_modal",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "1768"
+  },
+  {
+    "index": "7",
+    "title": "CampusSprint - Team Velocity Chart",
+    "id": "ca5419cb802246c8be271db003a598a2",
+    "slug": "07_campussprint_team_velocity_chart",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "2718"
+  },
+  {
+    "index": "8",
+    "title": "CampusSprint - Team Members & Workload",
+    "id": "949488180fad4aeca76ed978837f9851",
+    "slug": "08_campussprint_team_members_and_workload",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "2868"
+  },
+  {
+    "index": "9",
+    "title": "CampusSprint - User Profile & Settings",
+    "id": "5f5a88e4d86a469daf3c1243205fd446",
+    "slug": "09_campussprint_user_profile_and_settings",
+    "deviceType": "MOBILE",
+    "width": "780",
+    "height": "3296"
+  }
+]
