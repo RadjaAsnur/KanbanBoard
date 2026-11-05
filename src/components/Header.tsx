@@ -2,7 +2,7 @@
 // Visual fidelity: Stitch Screen 04 ("CampusSprint Sprint 04", Synced status, Board ID input)
 
 import { useState, useRef, useEffect } from 'react';
-import { CheckCircle2, RotateCcw, Terminal, Layers, Check, Edit2 } from 'lucide-react';
+import { CheckCircle2, Terminal, Layers, Check, Edit2 } from 'lucide-react';
 import type { PriorityFilter, ProgressStats, SyncStatus } from '../hooks/useTasks';
 
 interface HeaderProps {
@@ -12,7 +12,6 @@ interface HeaderProps {
   syncStatus: SyncStatus;
   onFilterChange: (f: PriorityFilter) => void;
   onBoardKeyChange: (key: string) => void;
-  onReset?: () => void;
 }
 
 const FILTER_OPTIONS: { label: string; value: PriorityFilter; dotColor: string }[] = [
@@ -29,7 +28,6 @@ export function Header({
   syncStatus,
   onFilterChange,
   onBoardKeyChange,
-  onReset,
 }: HeaderProps) {
   const { doneCount, totalCount, percentage } = progress;
   const [isEditingBoard, setIsEditingBoard] = useState(false);
@@ -80,11 +78,10 @@ export function Header({
           </div>
         </div>
 
-        {/* Sync Status Badge & Reset Control */}
+        {/* Sync Status Badge */}
         <div className="flex items-center gap-1.5 shrink-0">
-          {/* Sync Status Indicator */}
           <div
-            className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[#f2f4f6] border border-[#e0e3e5]"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#f2f4f6] border border-[#e0e3e5]"
             title={`Supabase status: ${syncStatus}`}
           >
             <span
@@ -100,18 +97,6 @@ export function Header({
               {syncStatus}
             </span>
           </div>
-
-          {onReset && (
-            <button
-              type="button"
-              onClick={onReset}
-              className="p-1.5 rounded-lg text-[#505f76] hover:bg-[#eceef0] hover:text-[#191c1e] transition-colors active:scale-95 min-w-[34px] min-h-[34px] flex items-center justify-center"
-              title="Reset sample data"
-              aria-label="Reset sample data"
-            >
-              <RotateCcw size={14} />
-            </button>
-          )}
         </div>
       </div>
 

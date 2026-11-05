@@ -21,7 +21,6 @@ export default function App() {
     updateTaskPriority,
     deleteTask,
     setPriorityFilter,
-    resetTasks,
   } = useTasks();
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -42,7 +41,6 @@ export default function App() {
         syncStatus={syncStatus}
         onFilterChange={setPriorityFilter}
         onBoardKeyChange={setBoardKey}
-        onReset={resetTasks}
       />
 
       {/* Storage Notification (Accessible alert) */}
