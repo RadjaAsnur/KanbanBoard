@@ -1,14 +1,16 @@
 // ============================================================
 // useTasks — Hybrid Sync (LocalStorage + Supabase)
 // Features: Board Key / Sync ID + Instant 0ms Optimistic UI Updates
+// Detailed console logging for developer debugging (F12)
 // ============================================================
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { Task, Priority, TaskStatus } from '../types/task';
 import { STATUS_ORDER, NEXT_PRIORITY_CYCLE } from '../types/task';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { supabase, isSupabaseConfigured, supabaseUrl } from '../lib/supabase';
 
 const DEFAULT_BOARD_KEY = 'default-board';
+const TABLE_NAME = 'tasks';
 
 /** Helper to get initial boardKey from URL (?board=...) or localStorage or default */
 function getInitialBoardKey(): string {
@@ -87,6 +89,20 @@ function generateId(): string {
   return `task-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+/** Formatter helper for Supabase DB payload conforming to exact table schema */
+function toSupabasePayload(task: Task, boardKey: string) {
+  return {
+    id: task.id,
+    board_key: boardKey,
+    title: task.title,
+    description: task.description || null,
+    priority: task.priority,
+    status: task.status,
+    due_date: task.dueDate || null,
+    created_at: task.createdAt, // bigint timestamp
+  };
+}
+
 export type PriorityFilter = Priority | 'ALL';
 export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error';
 
@@ -128,6 +144,7 @@ export function useTasks(): UseTasksReturn {
   // Sync boardKey to URL and localStorage
   const setBoardKey = useCallback((newKey: string) => {
     const sanitized = newKey.trim() || DEFAULT_BOARD_KEY;
+    console.log(`[useTasks] Switching active board to: "${sanitized}"`);
     setBoardKeyState(sanitized);
     try {
       window.localStorage.setItem('campussprint_active_board', sanitized);
@@ -150,6 +167,7 @@ export function useTasks(): UseTasksReturn {
     setTasksState(cached);
 
     if (!supabase || !isSupabaseConfigured) {
+      console.warn('[useTasks] Supabase is not configured. Running in Local-Only mode.');
       setSyncStatus('offline');
       return;
     }
@@ -159,17 +177,33 @@ export function useTasks(): UseTasksReturn {
 
     async function fetchCloudTasks() {
       if (!supabase) return;
+      console.log(`[useTasks] Fetching tasks from Supabase table "${TABLE_NAME}" for board_key = "${boardKey}"...`);
+
       try {
-        const { data, error } = await supabase
-          .from('tasks')
+        const { data, error, status, statusText } = await supabase
+          .from(TABLE_NAME)
           .select('*')
           .eq('board_key', boardKey);
 
         if (error) {
-          console.warn('[useTasks] Supabase query error (falling back to local cache):', error.message);
-          if (isMounted) setSyncStatus('offline');
+          console.error(
+            `%c[useTasks] Supabase SELECT Error on table "${TABLE_NAME}":%c`,
+            'color: #ef4444; font-weight: bold;',
+            'color: inherit;',
+            {
+              message: error.message,
+              details: error.details,
+              hint: error.hint,
+              code: error.code,
+              httpStatus: status,
+              statusText: statusText,
+            }
+          );
+          if (isMounted) setSyncStatus('error');
           return;
         }
+
+        console.log(`[useTasks] Supabase SELECT Success. Loaded ${data?.length ?? 0} tasks for board "${boardKey}".`, data);
 
         if (isMounted && data) {
           if (data.length > 0) {
@@ -182,32 +216,28 @@ export function useTasks(): UseTasksReturn {
               dueDate: row.due_date || row.dueDate || undefined,
               category: row.category || undefined,
               boardKey: row.board_key || boardKey,
-              createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+              createdAt: typeof row.created_at === 'number'
+                ? row.created_at
+                : (row.created_at ? new Date(row.created_at).getTime() : Date.now()),
             }));
 
             setTasksState(mapped);
             saveLocalTasks(boardKey, mapped);
           } else if (cached.length > 0 && boardKey === DEFAULT_BOARD_KEY) {
-            // Seed cloud with initial data in the background if empty
-            for (const item of cached) {
-              await supabase.from('tasks').insert([
-                {
-                  id: item.id,
-                  title: item.title,
-                  description: item.description,
-                  priority: item.priority,
-                  status: item.status,
-                  due_date: item.dueDate,
-                  category: item.category,
-                  board_key: boardKey,
-                },
-              ]);
+            // Seed cloud with initial data if remote is empty
+            console.log('[useTasks] Cloud board is empty. Seeding initial tasks to Supabase...');
+            const seedPayloads = cached.map((c) => toSupabasePayload(c, boardKey));
+            const { error: seedError } = await supabase.from(TABLE_NAME).insert(seedPayloads);
+            if (seedError) {
+              console.error('[useTasks] Error seeding tasks to Supabase:', seedError);
+            } else {
+              console.log('[useTasks] Successfully seeded initial tasks to Supabase.');
             }
           }
           setSyncStatus('synced');
         }
       } catch (err: any) {
-        console.warn('[useTasks] Supabase connection failed, using local storage:', err.message);
+        console.error('[useTasks] Unexpected error while fetching from Supabase:', err);
         if (isMounted) setSyncStatus('offline');
       }
     }
@@ -238,6 +268,8 @@ export function useTasks(): UseTasksReturn {
         createdAt: Date.now(),
       };
 
+      console.log(`[useTasks] Optimistically adding task "${newTask.title}" (id: ${newTask.id}) to board "${currentBoard}"...`);
+
       // 1. Optimistic Local Update (0ms)
       setTasksState((prev) => {
         const next = [newTask, ...prev];
@@ -248,30 +280,44 @@ export function useTasks(): UseTasksReturn {
       // 2. Background Cloud Sync
       if (supabase && isSupabaseConfigured) {
         setSyncStatus('syncing');
+        const dbPayload = toSupabasePayload(newTask, currentBoard);
+
+        console.log(`[useTasks] Sending INSERT to table "${TABLE_NAME}"...`, dbPayload);
+
         (async () => {
           try {
-            const { error } = await supabase.from('tasks').insert([
-              {
-                id: newTask.id,
-                title: newTask.title,
-                description: newTask.description,
-                priority: newTask.priority,
-                status: newTask.status,
-                due_date: newTask.dueDate,
-                category: newTask.category,
-                board_key: currentBoard,
-              },
-            ]);
+            const { data, error, status, statusText } = await supabase
+              .from(TABLE_NAME)
+              .insert([dbPayload])
+              .select();
+
             if (error) {
-              console.warn('[useTasks] Cloud insert error (kept in localStorage):', error.message);
-              setSyncStatus('offline');
+              console.error(
+                `%c[useTasks] Supabase INSERT FAILED on table "${TABLE_NAME}":%c`,
+                'color: #ef4444; font-weight: bold;',
+                'color: inherit;',
+                {
+                  message: error.message,
+                  details: error.details,
+                  hint: error.hint,
+                  code: error.code,
+                  httpStatus: status,
+                  statusText: statusText,
+                  payload: dbPayload,
+                }
+              );
+              setSyncStatus('error');
             } else {
+              console.log(`%c[useTasks] Supabase INSERT SUCCESS for task "${newTask.id}"!%c`, 'color: #10b981; font-weight: bold;', 'color: inherit;', data);
               setSyncStatus('synced');
             }
-          } catch {
+          } catch (err: any) {
+            console.error('[useTasks] Exception during Supabase INSERT:', err);
             setSyncStatus('offline');
           }
         })();
+      } else {
+        console.warn(`[useTasks] Task created in LocalStorage only (Supabase client not configured: URL=${supabaseUrl})`);
       }
     },
     []
@@ -305,20 +351,30 @@ export function useTasks(): UseTasksReturn {
     // 2. Background Cloud Sync
     if (targetStatus && supabase && isSupabaseConfigured) {
       setSyncStatus('syncing');
+      console.log(`[useTasks] Sending UPDATE status=${targetStatus} to table "${TABLE_NAME}" for task "${id}"...`);
+
       (async () => {
         try {
-          const { error } = await supabase
-            .from('tasks')
+          const { error, status, statusText } = await supabase
+            .from(TABLE_NAME)
             .update({ status: targetStatus })
             .eq('id', id)
             .eq('board_key', currentBoard);
+
           if (error) {
-            console.warn('[useTasks] Cloud update error:', error.message);
-            setSyncStatus('offline');
+            console.error(
+              `%c[useTasks] Supabase UPDATE status FAILED:%c`,
+              'color: #ef4444; font-weight: bold;',
+              'color: inherit;',
+              { message: error.message, details: error.details, code: error.code, status, statusText }
+            );
+            setSyncStatus('error');
           } else {
+            console.log(`[useTasks] Supabase UPDATE status SUCCESS for task "${id}".`);
             setSyncStatus('synced');
           }
-        } catch {
+        } catch (err) {
+          console.error('[useTasks] Exception during Supabase UPDATE status:', err);
           setSyncStatus('offline');
         }
       })();
@@ -344,20 +400,30 @@ export function useTasks(): UseTasksReturn {
     // 2. Background Cloud Sync
     if (targetPriority && supabase && isSupabaseConfigured) {
       setSyncStatus('syncing');
+      console.log(`[useTasks] Sending UPDATE priority=${targetPriority} to table "${TABLE_NAME}" for task "${id}"...`);
+
       (async () => {
         try {
-          const { error } = await supabase
-            .from('tasks')
+          const { error, status, statusText } = await supabase
+            .from(TABLE_NAME)
             .update({ priority: targetPriority })
             .eq('id', id)
             .eq('board_key', currentBoard);
+
           if (error) {
-            console.warn('[useTasks] Cloud priority update error:', error.message);
-            setSyncStatus('offline');
+            console.error(
+              `%c[useTasks] Supabase UPDATE priority FAILED:%c`,
+              'color: #ef4444; font-weight: bold;',
+              'color: inherit;',
+              { message: error.message, details: error.details, code: error.code, status, statusText }
+            );
+            setSyncStatus('error');
           } else {
+            console.log(`[useTasks] Supabase UPDATE priority SUCCESS for task "${id}".`);
             setSyncStatus('synced');
           }
-        } catch {
+        } catch (err) {
+          console.error('[useTasks] Exception during Supabase UPDATE priority:', err);
           setSyncStatus('offline');
         }
       })();
@@ -367,6 +433,8 @@ export function useTasks(): UseTasksReturn {
   // Delete Task
   const deleteTask = useCallback((id: string) => {
     const currentBoard = boardKeyRef.current;
+
+    console.log(`[useTasks] Optimistically deleting task "${id}" from board "${currentBoard}"...`);
 
     // 1. Optimistic Local Update (0ms)
     setTasksState((prev) => {
@@ -378,20 +446,30 @@ export function useTasks(): UseTasksReturn {
     // 2. Background Cloud Sync
     if (supabase && isSupabaseConfigured) {
       setSyncStatus('syncing');
+      console.log(`[useTasks] Sending DELETE to table "${TABLE_NAME}" for task "${id}"...`);
+
       (async () => {
         try {
-          const { error } = await supabase
-            .from('tasks')
+          const { error, status, statusText } = await supabase
+            .from(TABLE_NAME)
             .delete()
             .eq('id', id)
             .eq('board_key', currentBoard);
+
           if (error) {
-            console.warn('[useTasks] Cloud delete error:', error.message);
-            setSyncStatus('offline');
+            console.error(
+              `%c[useTasks] Supabase DELETE FAILED:%c`,
+              'color: #ef4444; font-weight: bold;',
+              'color: inherit;',
+              { message: error.message, details: error.details, code: error.code, status, statusText }
+            );
+            setSyncStatus('error');
           } else {
+            console.log(`[useTasks] Supabase DELETE SUCCESS for task "${id}".`);
             setSyncStatus('synced');
           }
-        } catch {
+        } catch (err) {
+          console.error('[useTasks] Exception during Supabase DELETE:', err);
           setSyncStatus('offline');
         }
       })();
@@ -401,6 +479,7 @@ export function useTasks(): UseTasksReturn {
   // Reset Tasks
   const resetTasks = useCallback(() => {
     const currentBoard = boardKeyRef.current;
+    console.log(`[useTasks] Resetting tasks for board "${currentBoard}"...`);
     setTasksState(SEED_TASKS);
     saveLocalTasks(currentBoard, SEED_TASKS);
 
@@ -408,23 +487,18 @@ export function useTasks(): UseTasksReturn {
       setSyncStatus('syncing');
       (async () => {
         try {
-          await supabase.from('tasks').delete().eq('board_key', currentBoard);
-          for (const item of SEED_TASKS) {
-            await supabase.from('tasks').insert([
-              {
-                id: item.id,
-                title: item.title,
-                description: item.description,
-                priority: item.priority,
-                status: item.status,
-                due_date: item.dueDate,
-                category: item.category,
-                board_key: currentBoard,
-              },
-            ]);
+          await supabase.from(TABLE_NAME).delete().eq('board_key', currentBoard);
+          const seedPayloads = SEED_TASKS.map((item) => toSupabasePayload(item, currentBoard));
+          const { error } = await supabase.from(TABLE_NAME).insert(seedPayloads);
+          if (error) {
+            console.error('[useTasks] Reset seed insert error:', error);
+            setSyncStatus('error');
+          } else {
+            console.log('[useTasks] Reset complete.');
+            setSyncStatus('synced');
           }
-          setSyncStatus('synced');
-        } catch {
+        } catch (err) {
+          console.error('[useTasks] Exception during reset:', err);
           setSyncStatus('offline');
         }
       })();
