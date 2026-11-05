@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html, body, #root {
+    margin: 0;
+    padding: 0;
+    min-height: 100dvh;
+    /* Mobile-first: full viewport height on mobile, centered container on desktop */
+    background-color: #f1f5f9; /* slate-100 */
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+}
+
+@layer components {
+  /* Mobile-first container: full width on mobile, max-w-md centered on desktop */
+  .app-container {
+    @apply w-full min-h-dvh mx-auto relative;
+    @apply sm:max-w-md sm:shadow-2xl;
+    background-color: #ffffff;
+  }
+
+  /* Minimum tap target 44×44px per PRD UX requirements */
+  .tap-target {
+    @apply min-h-[44px] min-w-[44px] flex items-center justify-center;
+  }
+}
