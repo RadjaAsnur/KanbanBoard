@@ -1,15 +1,16 @@
 // TaskCard.tsx — Mobile-optimized task card with micro-interaction state changes
-// Adheres to WCAG AA color contrast (High, Medium, Low badges)
-// Min touch target 44x44px for action buttons, clear visual feedback
+// Features: Universal Delete button across all statuses + Interactive Priority Toggle
+// Adheres to WCAG AA color contrast (High, Medium, Low badges) and 44x44px min tap targets
 
 import { useState } from 'react';
 import { ArrowLeft, ArrowRight, Calendar, Check, Trash2, Undo2 } from 'lucide-react';
 import type { Task } from '../types/task';
-import { PRIORITY_LABELS, PRIORITY_STYLES } from '../types/task';
+import { PRIORITY_LABELS, PRIORITY_STYLES, NEXT_PRIORITY_CYCLE } from '../types/task';
 
 interface TaskCardProps {
   task: Task;
   onMove: (id: string, direction: 'forward' | 'backward') => void;
+  onTogglePriority: (id: string) => void;
   onDeleteRequest: (task: Task) => void;
 }
 
@@ -31,15 +32,15 @@ function formatDueDate(dueDate?: string): string {
   }
 }
 
-export function TaskCard({ task, onMove, onDeleteRequest }: TaskCardProps) {
+export function TaskCard({ task, onMove, onTogglePriority, onDeleteRequest }: TaskCardProps) {
   const [transitioning, setTransitioning] = useState<'forward' | 'backward' | null>(null);
   const isDone = task.status === 'DONE';
   const priorityStyle = PRIORITY_STYLES[task.priority];
+  const nextPriority = NEXT_PRIORITY_CYCLE[task.priority];
   const dueLabel = formatDueDate(task.dueDate);
 
   const handleMove = (direction: 'forward' | 'backward') => {
     setTransitioning(direction);
-    // Smooth transition feedback before updating state
     setTimeout(() => {
       onMove(task.id, direction);
       setTransitioning(null);
@@ -64,19 +65,27 @@ export function TaskCard({ task, onMove, onDeleteRequest }: TaskCardProps) {
       `}
       aria-label={`Task: ${task.title}, priority ${PRIORITY_LABELS[task.priority]}`}
     >
-      {/* Top Meta: Priority Badge + Category / Module + Due Date */}
+      {/* Top Meta: Interactive Priority Toggle Button + Category / Module + Due Date */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span
+          {/* Interactive Priority Toggle Badge — Min 44x32px mobile-friendly tap area */}
+          <button
+            type="button"
+            onClick={() => onTogglePriority(task.id)}
             className={`
-              px-2 py-0.5 rounded-md text-[11px] font-bold tracking-wider uppercase
-              ${priorityStyle.badge}
+              inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold tracking-wider uppercase
+              min-h-[34px] min-w-[70px] justify-center transition-all duration-150 active:scale-95 cursor-pointer
+              ${priorityStyle.badge} hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-slate-400
             `}
+            title={`Current: ${PRIORITY_LABELS[task.priority]}. Tap to switch to ${PRIORITY_LABELS[nextPriority]}`}
+            aria-label={`Priority: ${PRIORITY_LABELS[task.priority]}. Tap to change priority to ${PRIORITY_LABELS[nextPriority]}`}
           >
-            {PRIORITY_LABELS[task.priority]}
-          </span>
+            <span className={`w-2 h-2 rounded-full shrink-0 ${priorityStyle.dot}`} />
+            <span>{PRIORITY_LABELS[task.priority]}</span>
+          </button>
+
           {task.category && (
-            <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-[#eceef0] text-[#505f76] truncate font-mono">
+            <span className="px-2 py-1 rounded-md text-[11px] font-medium bg-[#eceef0] text-[#505f76] truncate font-mono">
               {task.category}
             </span>
           )}
@@ -107,26 +116,37 @@ export function TaskCard({ task, onMove, onDeleteRequest }: TaskCardProps) {
         )}
       </div>
 
-      {/* Action Buttons: 44x44px minimum tap targets with clear micro-interactions */}
+      {/* Action Buttons: Status Navigation + Universal Delete Button (min 44x44px touch targets) */}
       <div className="pt-1 border-t border-[#f2f4f6]">
         {task.status === 'TODO' && (
-          <button
-            type="button"
-            onClick={() => handleMove('forward')}
-            className="w-full h-11 min-h-[44px] px-4 rounded-lg bg-[#f2f4f6] hover:bg-[#eceef0] text-[#191c1e] text-[13px] font-semibold flex items-center justify-center gap-1.5 active:scale-98 transition-all group"
-            aria-label={`Start task: ${task.title}`}
-          >
-            <span>Start Sprint</span>
-            <ArrowRight size={15} strokeWidth={2.2} className="group-hover:translate-x-0.5 transition-transform" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleMove('forward')}
+              className="flex-1 h-11 min-h-[44px] px-4 rounded-lg bg-[#f2f4f6] hover:bg-[#eceef0] text-[#191c1e] text-[13px] font-semibold flex items-center justify-center gap-1.5 active:scale-98 transition-all group"
+              aria-label={`Start task: ${task.title}`}
+            >
+              <span>Start Sprint</span>
+              <ArrowRight size={15} strokeWidth={2.2} className="group-hover:translate-x-0.5 transition-transform" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onDeleteRequest(task)}
+              className="h-11 min-h-[44px] w-12 min-w-[44px] rounded-lg bg-red-50 hover:bg-red-100 text-red-600 flex items-center justify-center active:scale-98 transition-all shrink-0"
+              title="Delete task"
+              aria-label={`Delete task: ${task.title}`}
+            >
+              <Trash2 size={16} strokeWidth={2} />
+            </button>
+          </div>
         )}
 
         {task.status === 'IN_PROGRESS' && (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => handleMove('backward')}
-              className="h-11 min-h-[44px] px-3 rounded-lg bg-[#f2f4f6] hover:bg-[#eceef0] text-[#505f76] text-[13px] font-medium flex items-center justify-center gap-1.5 active:scale-98 transition-all group"
+              className="flex-1 h-11 min-h-[44px] px-2.5 rounded-lg bg-[#f2f4f6] hover:bg-[#eceef0] text-[#505f76] text-[13px] font-medium flex items-center justify-center gap-1 active:scale-98 transition-all group"
               aria-label={`Move back to To do: ${task.title}`}
             >
               <ArrowLeft size={15} strokeWidth={2} className="group-hover:-translate-x-0.5 transition-transform" />
@@ -135,11 +155,20 @@ export function TaskCard({ task, onMove, onDeleteRequest }: TaskCardProps) {
             <button
               type="button"
               onClick={() => handleMove('forward')}
-              className="h-11 min-h-[44px] px-3 rounded-lg bg-[#0f172a] hover:bg-[#1e293b] text-white text-[13px] font-semibold flex items-center justify-center gap-1.5 active:scale-98 transition-all shadow-sm"
+              className="flex-1 h-11 min-h-[44px] px-2.5 rounded-lg bg-[#0f172a] hover:bg-[#1e293b] text-white text-[13px] font-semibold flex items-center justify-center gap-1 active:scale-98 transition-all shadow-sm"
               aria-label={`Mark as Done: ${task.title}`}
             >
               <span>Done</span>
               <Check size={15} strokeWidth={2.5} />
+            </button>
+            <button
+              type="button"
+              onClick={() => onDeleteRequest(task)}
+              className="h-11 min-h-[44px] w-12 min-w-[44px] rounded-lg bg-red-50 hover:bg-red-100 text-red-600 flex items-center justify-center active:scale-98 transition-all shrink-0"
+              title="Delete task"
+              aria-label={`Delete task: ${task.title}`}
+            >
+              <Trash2 size={16} strokeWidth={2} />
             </button>
           </div>
         )}
@@ -158,7 +187,7 @@ export function TaskCard({ task, onMove, onDeleteRequest }: TaskCardProps) {
             <button
               type="button"
               onClick={() => onDeleteRequest(task)}
-              className="h-11 min-h-[44px] w-12 min-w-[44px] rounded-lg bg-red-50 hover:bg-red-100 text-red-600 flex items-center justify-center active:scale-98 transition-all"
+              className="h-11 min-h-[44px] w-12 min-w-[44px] rounded-lg bg-red-50 hover:bg-red-100 text-red-600 flex items-center justify-center active:scale-98 transition-all shrink-0"
               title="Delete task"
               aria-label={`Delete task: ${task.title}`}
             >

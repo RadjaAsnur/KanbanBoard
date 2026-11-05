@@ -15,6 +15,7 @@ export default function App() {
     storageError,
     addTask,
     moveTaskStatus,
+    updateTaskPriority,
     deleteTask,
     setPriorityFilter,
     resetTasks,
@@ -54,6 +55,7 @@ export default function App() {
           tasks={filteredTasks}
           countByStatus={countByStatus}
           onMove={moveTaskStatus}
+          onTogglePriority={updateTaskPriority}
           onDeleteRequest={(task) => setTaskToDelete(task)}
           onOpenNewTask={() => setIsAddModalOpen(true)}
         />

@@ -11,6 +11,7 @@ interface KanbanBoardProps {
   tasks: Task[];
   countByStatus: Record<TaskStatus, number>;
   onMove: (id: string, direction: 'forward' | 'backward') => void;
+  onTogglePriority: (id: string) => void;
   onDeleteRequest: (task: Task) => void;
   onOpenNewTask?: () => void;
 }
@@ -34,6 +35,7 @@ export function KanbanBoard({
   tasks,
   countByStatus,
   onMove,
+  onTogglePriority,
   onDeleteRequest,
   onOpenNewTask,
 }: KanbanBoardProps) {
@@ -175,6 +177,7 @@ export function KanbanBoard({
                 <TaskCard
                   task={task}
                   onMove={onMove}
+                  onTogglePriority={onTogglePriority}
                   onDeleteRequest={onDeleteRequest}
                 />
               </div>

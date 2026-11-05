@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Task, Priority, TaskStatus } from '../types/task';
-import { STATUS_ORDER } from '../types/task';
+import { STATUS_ORDER, NEXT_PRIORITY_CYCLE } from '../types/task';
 
 const STORAGE_KEY = 'campussprint_tasks';
 
@@ -86,6 +86,7 @@ export interface UseTasksReturn {
   countByStatus: Record<TaskStatus, number>;
   addTask: (payload: Omit<Task, 'id' | 'createdAt' | 'status'>) => void;
   moveTaskStatus: (id: string, direction: 'forward' | 'backward') => void;
+  updateTaskPriority: (id: string) => void;
   deleteTask: (id: string) => void;
   setPriorityFilter: (filter: PriorityFilter) => void;
   resetTasks: () => void;
@@ -130,6 +131,17 @@ export function useTasks(): UseTasksReturn {
 
         if (nextIdx === currentIdx) return task;
         return { ...task, status: STATUS_ORDER[nextIdx] };
+      })
+    );
+  }, []);
+
+  // Cycle priority: LOW -> MEDIUM -> HIGH -> LOW
+  const updateTaskPriority = useCallback((id: string) => {
+    setTasksState((prev) =>
+      prev.map((task) => {
+        if (task.id !== id) return task;
+        const nextPriority = NEXT_PRIORITY_CYCLE[task.priority] || 'LOW';
+        return { ...task, priority: nextPriority };
       })
     );
   }, []);
@@ -194,6 +206,7 @@ export function useTasks(): UseTasksReturn {
     countByStatus,
     addTask,
     moveTaskStatus,
+    updateTaskPriority,
     deleteTask,
     setPriorityFilter,
     resetTasks,

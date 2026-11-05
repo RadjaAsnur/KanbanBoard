@@ -22,6 +22,13 @@ export interface Task {
 /** Ordered list of statuses for tap-to-advance logic */
 export const STATUS_ORDER: TaskStatus[] = ['TODO', 'IN_PROGRESS', 'DONE'];
 
+/** Ordered cycle for priority toggle: LOW -> MEDIUM -> HIGH -> LOW */
+export const NEXT_PRIORITY_CYCLE: Record<Priority, Priority> = {
+  LOW: 'MEDIUM',
+  MEDIUM: 'HIGH',
+  HIGH: 'LOW',
+};
+
 /** Human-readable labels for each status column (English) */
 export const STATUS_LABELS: Record<TaskStatus, string> = {
   TODO: 'To do',
