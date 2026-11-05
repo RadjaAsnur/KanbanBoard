@@ -88,6 +88,12 @@ export function Header({
   const isPriorityActive = priorityFilter !== 'ALL';
   const isCategoryActive = categoryFilter !== 'ALL';
 
+  // Dynamic initial letter from boardKey for SaaS avatar (e.g., 'sprint-a8f' -> 'A', 'my-team' -> 'M')
+  const boardInitial =
+    (boardKey.replace(/^sprint-?/i, '') || boardKey)
+      .charAt(0)
+      .toUpperCase() || 'B';
+
   // Close popover on Escape key
   useEffect(() => {
     if (!activePopover) return;
@@ -123,20 +129,20 @@ export function Header({
   return (
     <header className="sticky top-0 z-30 bg-[#f7f9fb]/95 backdrop-blur-md border-b border-[#e0e3e5] pt-safe shadow-[0_1px_6px_rgba(0,0,0,0.03)]">
       {/* Top Navbar */}
-      <div className="h-14 px-4 flex items-center justify-between gap-2.5">
-        {/* Brand Logo & Sprint Title */}
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="h-14 px-4 flex items-center justify-between gap-3">
+        {/* Brand Logo & Sprint Badge */}
+        <div className="flex items-center gap-2.5 min-w-0">
           <div
-            className="w-7 h-7 bg-[#0f172a] rounded-lg flex items-center justify-center shrink-0 shadow-sm"
+            className="w-8 h-8 bg-slate-900 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
             aria-hidden="true"
           >
-            <Terminal size={15} className="text-white" strokeWidth={2.5} />
+            <Terminal size={16} className="text-white" strokeWidth={2.5} />
           </div>
-          <div className="flex items-center gap-1.5 min-w-0">
-            <h1 className="text-[15px] font-bold text-[#191c1e] tracking-tight truncate">
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className="text-[15px] font-bold text-slate-900 tracking-tight leading-none truncate">
               CampusSprint
             </h1>
-            <span className="px-1.5 py-0.5 rounded-md bg-[#eceef0] text-[10px] font-semibold text-[#505f76] shrink-0 font-mono">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 border border-slate-200/80 text-[10px] font-semibold text-slate-500 font-mono leading-none shrink-0">
               Sprint 04
             </span>
           </div>
@@ -145,7 +151,7 @@ export function Header({
         {/* Sync Status Badge & Switch Board Button */}
         <div className="flex items-center gap-2 shrink-0">
           <div
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#f2f4f6] border border-[#e0e3e5]"
+            className="h-8 px-2.5 rounded-lg bg-slate-100/90 border border-slate-200/80 flex items-center gap-1.5"
             title={`Supabase status: ${syncStatus}`}
           >
             <span
@@ -157,7 +163,7 @@ export function Header({
                   : 'bg-slate-400'
               }`}
             />
-            <span className="text-[11px] font-medium text-[#505f76] capitalize">
+            <span className="text-[11px] font-medium text-slate-600 capitalize leading-none">
               {syncStatus}
             </span>
           </div>
@@ -165,7 +171,7 @@ export function Header({
           <button
             type="button"
             onClick={onLeaveBoard}
-            className="h-8 px-2.5 rounded-lg bg-white border border-[#e0e3e5] text-[#505f76] hover:text-[#191c1e] hover:bg-[#eceef0] text-[11px] font-semibold flex items-center gap-1 active:scale-95 transition-all shadow-sm"
+            className="h-8 px-2.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 text-[11px] font-semibold flex items-center gap-1.5 active:scale-95 transition-all shadow-xs"
             title="Leave current board or switch code"
             aria-label="Switch or leave board"
           >
@@ -175,62 +181,114 @@ export function Header({
         </div>
       </div>
 
-      {/* Board Key Copy Badge + Progress Counter Tag */}
-      <div className="px-4 pb-2 pt-0.5 flex items-center justify-between gap-2">
-        {/* Copy Board ID Button */}
-        <div className="flex items-center gap-1.5 min-w-0 flex-1">
-          <button
-            type="button"
-            onClick={handleCopyLink}
-            className={`
-              group flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-mono text-[11px] font-medium
-              active:scale-95 transition-all
-              ${
-                copied
-                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
-                  : 'bg-white border-[#e0e3e5] text-[#191c1e] hover:bg-[#f2f4f6]'
-              }
-            `}
-            title="Tap to copy complete board share link to clipboard"
-            aria-label={`Copy board ID ${boardKey}`}
-          >
-            {copied ? (
-              <>
-                <Check size={12} strokeWidth={2.5} className="text-emerald-600" />
-                <span className="font-semibold text-emerald-700">Link Copied!</span>
-              </>
-            ) : (
-              <>
-                <span className="text-[#76777d] uppercase text-[10px] font-bold font-sans">ID:</span>
-                <span className="font-semibold truncate max-w-[130px]">{boardKey}</span>
-                <Copy size={11} className="text-[#505f76] opacity-70 group-hover:opacity-100 shrink-0" />
-              </>
-            )}
-          </button>
-        </div>
+      {/* SaaS Glassmorphic Board Workspace & Integrated Progress Card */}
+      <div className="px-4 pb-2.5 pt-0.5">
+        <div className="relative p-3 sm:p-3.5 rounded-2xl bg-white/80 backdrop-blur-md border border-slate-200/90 shadow-[0_2px_12px_rgba(15,23,42,0.04)] transition-all">
+          {/* Top Row: Workspace Identity (Left) & Progress Stats with Copy Action (Right) */}
+          <div className="flex items-center justify-between gap-3">
+            {/* Left: Avatar & Workspace Identification */}
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+              {/* Perfectly proportioned circular avatar with soft glowing shadow */}
+              <div className="relative shrink-0">
+                <div
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full aspect-square bg-gradient-to-tr from-indigo-600 via-violet-600 to-sky-400 flex items-center justify-center text-white font-bold text-[13px] shadow-[0_2px_8px_rgba(99,102,241,0.28)] ring-2 ring-white"
+                  aria-hidden="true"
+                >
+                  {boardInitial}
+                </div>
+                {/* Live connection micro-badge */}
+                <span
+                  className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
+                    syncStatus === 'synced'
+                      ? 'bg-emerald-500'
+                      : syncStatus === 'syncing'
+                      ? 'bg-amber-500 animate-pulse'
+                      : 'bg-slate-400'
+                  }`}
+                  title={`Status: ${syncStatus}`}
+                />
+              </div>
 
-        {/* Progress Counter Tag */}
-        <div className="flex items-center gap-1 text-[#505f76] text-[11px] font-semibold shrink-0">
-          <CheckCircle2 size={12} className={percentage === 100 ? 'text-emerald-600' : 'text-[#505f76]'} />
-          <span>{doneCount}</span>
-          <span className="text-slate-400 font-normal">/{totalCount} Done</span>
-        </div>
-      </div>
+              {/* Board metadata & clickable copy trigger */}
+              <div className="flex flex-col min-w-0 text-left">
+                <span className="text-[9px] font-semibold tracking-wider uppercase text-slate-400 leading-none mb-1.5 select-none">
+                  Board Workspace
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className="group/id inline-flex items-center gap-1.5 text-left active:opacity-75 transition-opacity"
+                  title="Klik untuk salin tautan board lengkap"
+                >
+                  <span className="font-mono text-[12.5px] sm:text-[13px] font-bold text-slate-900 tracking-tight truncate max-w-[105px] xs:max-w-[140px]">
+                    {boardKey}
+                  </span>
+                  <span
+                    className={`w-6 h-6 rounded-md flex items-center justify-center transition-all ${
+                      copied
+                        ? 'bg-emerald-500 text-white shadow-xs scale-105'
+                        : 'bg-slate-100 text-slate-400 group-hover/id:text-slate-700 group-hover/id:bg-slate-200/80'
+                    }`}
+                  >
+                    {copied ? (
+                      <Check size={12} strokeWidth={2.5} className="animate-in zoom-in-50" />
+                    ) : (
+                      <Copy size={11} strokeWidth={2} />
+                    )}
+                  </span>
+                </button>
+              </div>
+            </div>
 
-      {/* Accessible Progress Bar */}
-      <div className="px-4 pb-2">
-        <div
-          className="h-1.5 w-full rounded-full bg-[#e0e3e5] overflow-hidden"
-          role="progressbar"
-          aria-valuenow={percentage}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label={`Overall sprint progress: ${doneCount} of ${totalCount} tasks completed`}
-        >
-          <div
-            className="h-full rounded-full bg-[#0f172a] transition-all duration-300 ease-out"
-            style={{ width: `${Math.max(percentage, totalCount > 0 ? 3 : 0)}%` }}
-          />
+            {/* Subtle Vertical Divider */}
+            <div className="h-8 w-px bg-slate-200/80 shrink-0" aria-hidden="true" />
+
+            {/* Right: Integrated Sprint Progress Stats */}
+            <div className="flex flex-col items-end shrink-0 pl-1">
+              <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-700">
+                <CheckCircle2
+                  size={12}
+                  className={percentage === 100 ? 'text-emerald-600' : 'text-indigo-600'}
+                />
+                <span className="font-bold text-slate-900">{doneCount}</span>
+                <span className="text-slate-400 font-normal">/{totalCount} Done</span>
+              </div>
+              <span className="text-[9.5px] font-semibold text-slate-400 font-mono mt-0.5">
+                {percentage}% finished
+              </span>
+            </div>
+          </div>
+
+          {/* Integrated Sleek Progress Bar inside the card */}
+          <div className="mt-2.5 pt-2 border-t border-slate-100/90 flex items-center gap-2.5">
+            <div
+              className="h-1.5 flex-1 rounded-full bg-slate-100 overflow-hidden"
+              role="progressbar"
+              aria-valuenow={percentage}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`Sprint progress: ${doneCount} of ${totalCount} tasks completed`}
+            >
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-slate-900 transition-all duration-300 ease-out"
+                style={{ width: `${Math.max(percentage, totalCount > 0 ? 3 : 0)}%` }}
+              />
+            </div>
+            <span className="text-[10px] font-mono font-bold text-slate-500 shrink-0">
+              {percentage}%
+            </span>
+          </div>
+
+          {/* Floating Tooltip / Toast Notification */}
+          {copied && (
+            <div
+              role="status"
+              className="absolute -bottom-8 left-3 z-30 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900/95 text-white text-[11px] font-semibold shadow-lg shadow-slate-900/20 backdrop-blur-sm border border-slate-700/50 animate-in fade-in slide-in-from-top-1 duration-200 pointer-events-none"
+            >
+              <Check size={12} className="text-emerald-400 shrink-0" strokeWidth={2.5} />
+              <span className="whitespace-nowrap">Link Board disalin!</span>
+            </div>
+          )}
         </div>
       </div>
 
