@@ -1,5 +1,5 @@
 // App.tsx — CampusSprint Mobile Kanban Board root
-// Single-page mobile container with desktop centering (max-w-md mx-auto)
+// Features Hybrid Sync (LocalStorage + Supabase) + Optimistic Updates
 
 import { useState } from 'react';
 import { useTasks } from './hooks';
@@ -11,8 +11,11 @@ export default function App() {
     filteredTasks,
     countByStatus,
     priorityFilter,
+    boardKey,
+    syncStatus,
     progress,
     storageError,
+    setBoardKey,
     addTask,
     moveTaskStatus,
     updateTaskPriority,
@@ -31,11 +34,14 @@ export default function App() {
 
   return (
     <div className="app-container bg-[#f7f9fb] text-[#191c1e] min-h-screen flex flex-col antialiased selection:bg-slate-900 selection:text-white">
-      {/* Header with App Title, Progress Counter, and Priority Filters */}
+      {/* Header with App Title, Progress Counter, Board Key Sync, and Priority Filters */}
       <Header
         progress={progress}
         priorityFilter={priorityFilter}
+        boardKey={boardKey}
+        syncStatus={syncStatus}
         onFilterChange={setPriorityFilter}
+        onBoardKeyChange={setBoardKey}
         onReset={resetTasks}
       />
 

@@ -14,6 +14,7 @@ export interface Task {
   status: TaskStatus;
   dueDate?: string;
   category?: string;
+  boardKey?: string;
   createdAt: number;
 }
 
