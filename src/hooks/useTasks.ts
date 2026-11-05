@@ -1,83 +1,122 @@
 // ============================================================
 // useTasks — Hybrid Sync (LocalStorage + Supabase)
-// Features: Board Key / Sync ID + Instant 0ms Optimistic UI Updates
-// Detailed console logging for developer debugging (F12)
+// Features: Dynamic Categories + Priority & Category Filters
+// Key: 'campussprint_board_key'
 // ============================================================
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { Task, Priority, TaskStatus } from '../types/task';
-import { STATUS_ORDER, NEXT_PRIORITY_CYCLE } from '../types/task';
-import { supabase, isSupabaseConfigured, supabaseUrl } from '../lib/supabase';
+import { STATUS_ORDER, NEXT_PRIORITY_CYCLE, DEFAULT_CATEGORIES } from '../types/task';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
-const DEFAULT_BOARD_KEY = 'default-board';
+const BOARD_KEY_STORAGE = 'campussprint_board_key';
+const CUSTOM_CATEGORIES_STORAGE = 'campussprint_custom_categories';
 const TABLE_NAME = 'tasks';
 
-/** Helper to get initial boardKey from URL (?board=...) or localStorage or default */
-function getInitialBoardKey(): string {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const fromUrl = params.get('board')?.trim();
-    if (fromUrl) return fromUrl;
-    const fromStorage = window.localStorage.getItem('campussprint_active_board')?.trim();
-    if (fromStorage) return fromStorage;
-  } catch {
-    // SSR / test fallback
-  }
-  return DEFAULT_BOARD_KEY;
+/** Generate clean random board key string, e.g. sprint-k8m2px */
+export function generateRandomBoardKey(): string {
+  const randomPart = Math.random().toString(36).substring(2, 8);
+  return `sprint-${randomPart}`;
 }
 
-/** Seed dummy tasks for first run if local & cloud are empty */
-const SEED_TASKS: Task[] = [
-  {
-    id: 'seed-1',
-    title: 'Wireframe low-fi auth flow in Figma',
-    description: 'Establish initial mobile wireframes for student onboard and login views.',
-    priority: 'HIGH',
-    status: 'TODO',
-    category: 'UI/UX',
-    dueDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
-    createdAt: Date.now() - 3600_000,
-  },
-  {
-    id: 'seed-2',
-    title: 'Implement JWT refresh token interceptor',
-    description: 'Handle token expiration gracefully with automatic background renewal.',
-    priority: 'HIGH',
-    status: 'IN_PROGRESS',
-    category: 'Backend',
-    dueDate: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10),
-    createdAt: Date.now() - 7200_000,
-  },
-  {
-    id: 'seed-3',
-    title: 'Setup mobile viewport container & Tailwind system',
-    description: 'Ensure max-w-md centering on desktop screens and 44px tap targets.',
-    priority: 'MEDIUM',
-    status: 'DONE',
-    category: 'Frontend',
-    dueDate: new Date(Date.now() - 86400000).toISOString().slice(0, 10),
-    createdAt: Date.now() - 86400_000,
-  },
-];
+/** Check initial board key from URL param ?board= or localStorage */
+function detectInitialBoardKey(): string | null {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get('board')?.trim().toLowerCase();
+    if (fromUrl) {
+      window.localStorage.setItem(BOARD_KEY_STORAGE, fromUrl);
+      return fromUrl;
+    }
+    const fromStorage = window.localStorage.getItem(BOARD_KEY_STORAGE)?.trim().toLowerCase();
+    if (fromStorage) {
+      return fromStorage;
+    }
+  } catch {
+    // fallback
+  }
+  return null;
+}
+
+/** Load custom categories from localStorage, seeded with defaults */
+function loadCustomCategories(): string[] {
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_CATEGORIES_STORAGE);
+    if (!raw) return DEFAULT_CATEGORIES;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_CATEGORIES;
+    // Ensure all defaults are present
+    const combined = Array.from(new Set([...DEFAULT_CATEGORIES, ...parsed]));
+    return combined;
+  } catch {
+    return DEFAULT_CATEGORIES;
+  }
+}
+
+function saveCustomCategories(categories: string[]): void {
+  try {
+    window.localStorage.setItem(CUSTOM_CATEGORIES_STORAGE, JSON.stringify(categories));
+  } catch {
+    // ignore
+  }
+}
+
+/** Default sample tasks seeded when a brand new board is initiated */
+function createInitialSeedTasks(): Task[] {
+  return [
+    {
+      id: `task-${Date.now()}-1`,
+      title: 'Submit software architecture documentation',
+      description: 'Prepare diagrams, API specifications, and database entity relationships.',
+      priority: 'HIGH',
+      status: 'TODO',
+      category: 'Academic',
+      dueDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+      createdAt: Date.now() - 3600_000,
+    },
+    {
+      id: `task-${Date.now()}-2`,
+      title: 'Build responsive Kanban board with Tailwind',
+      description: 'Implement drag-free tap-to-move interactions and WCAG AA contrast badges.',
+      priority: 'HIGH',
+      status: 'IN_PROGRESS',
+      category: 'Coding',
+      dueDate: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10),
+      createdAt: Date.now() - 7200_000,
+    },
+    {
+      id: `task-${Date.now()}-3`,
+      title: 'Organize student council meeting agenda',
+      description: 'Finalize budget review and delegate committee sprint leads.',
+      priority: 'MEDIUM',
+      status: 'DONE',
+      category: 'Organization',
+      dueDate: new Date(Date.now() - 86400000).toISOString().slice(0, 10),
+      createdAt: Date.now() - 86400_000,
+    },
+  ];
+}
 
 function getStorageKey(boardKey: string): string {
   return `campussprint_tasks_${boardKey}`;
 }
 
-function loadLocalTasks(boardKey: string): Task[] {
+function loadLocalTasks(boardKey: string | null): Task[] {
+  if (!boardKey) return [];
   try {
     const raw = window.localStorage.getItem(getStorageKey(boardKey));
-    if (!raw) return boardKey === DEFAULT_BOARD_KEY ? SEED_TASKS : [];
+    if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed as Task[];
   } catch (err) {
     console.warn('[useTasks] Error reading local cache:', err);
-    return boardKey === DEFAULT_BOARD_KEY ? SEED_TASKS : [];
+    return [];
   }
 }
 
-function saveLocalTasks(boardKey: string, tasks: Task[]): void {
+function saveLocalTasks(boardKey: string | null, tasks: Task[]): void {
+  if (!boardKey) return;
   try {
     window.localStorage.setItem(getStorageKey(boardKey), JSON.stringify(tasks));
   } catch (err) {
@@ -89,17 +128,36 @@ function generateId(): string {
   return `task-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-/** Formatter helper for Supabase DB payload conforming to exact table schema */
+/** Formatter helper: encode category safely inside description so Supabase without a category column syncs seamlessly */
+function serializeDescription(desc?: string, category?: string): string | null {
+  const cat = (category || 'General').trim();
+  const body = (desc || '').trim();
+  // Format: [category:Coding] task details...
+  return `[cat:${cat}]${body}`;
+}
+
+function deserializeDescription(rawDesc?: string | null): { description?: string; category: string } {
+  if (!rawDesc) return { category: 'General' };
+  const match = rawDesc.match(/^\[cat:([^\]]+)\]([\s\S]*)$/);
+  if (match) {
+    const category = match[1].trim() || 'General';
+    const description = match[2].trim() || undefined;
+    return { category, description };
+  }
+  return { description: rawDesc.trim() || undefined, category: 'General' };
+}
+
+/** Formatter helper for Supabase DB payload */
 function toSupabasePayload(task: Task, boardKey: string) {
   return {
     id: task.id,
     board_key: boardKey,
     title: task.title,
-    description: task.description || null,
+    description: serializeDescription(task.description, task.category),
     priority: task.priority,
     status: task.status,
     due_date: task.dueDate || null,
-    created_at: task.createdAt, // bigint timestamp
+    created_at: task.createdAt,
   };
 }
 
@@ -117,42 +175,69 @@ export interface UseTasksReturn {
   tasks: Task[];
   filteredTasks: Task[];
   priorityFilter: PriorityFilter;
-  boardKey: string;
+  categoryFilter: string; // 'ALL' or specific category name
+  availableCategories: string[];
+  boardKey: string | null;
   syncStatus: SyncStatus;
   storageError: string | null;
   progress: ProgressStats;
   countByStatus: Record<TaskStatus, number>;
-  setBoardKey: (newKey: string) => void;
+  createAutoBoard: () => string;
+  selectBoard: (key: string) => void;
+  leaveBoard: () => void;
   addTask: (payload: Omit<Task, 'id' | 'createdAt' | 'status'>) => void;
   moveTaskStatus: (id: string, direction: 'forward' | 'backward') => void;
   updateTaskPriority: (id: string) => void;
   deleteTask: (id: string) => void;
   setPriorityFilter: (filter: PriorityFilter) => void;
-  resetTasks: () => void;
+  setCategoryFilter: (category: string) => void;
+  registerCategory: (category: string) => void;
 }
 
 export function useTasks(): UseTasksReturn {
-  const [boardKey, setBoardKeyState] = useState<string>(() => getInitialBoardKey());
+  const [boardKey, setBoardKeyState] = useState<string | null>(() => detectInitialBoardKey());
   const [tasks, setTasksState] = useState<Task[]>(() => loadLocalTasks(boardKey));
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const [customCategories, setCustomCategories] = useState<string[]>(() => loadCustomCategories());
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(isSupabaseConfigured ? 'syncing' : 'offline');
   const [storageError] = useState<string | null>(null);
 
   const boardKeyRef = useRef(boardKey);
   boardKeyRef.current = boardKey;
 
-  // Sync boardKey to URL and localStorage
-  const setBoardKey = useCallback((newKey: string) => {
-    const sanitized = newKey.trim() || DEFAULT_BOARD_KEY;
-    console.log(`[useTasks] Switching active board to: "${sanitized}"`);
-    setBoardKeyState(sanitized);
+  // Compute union of default, custom, and any existing categories present in active tasks
+  const availableCategories = useMemo(() => {
+    const set = new Set<string>(customCategories);
+    tasks.forEach((t) => {
+      if (t.category && t.category.trim()) {
+        set.add(t.category.trim());
+      }
+    });
+    return Array.from(set);
+  }, [customCategories, tasks]);
+
+  const registerCategory = useCallback((newCat: string) => {
+    const trimmed = newCat.trim();
+    if (!trimmed) return;
+    setCustomCategories((prev) => {
+      if (prev.includes(trimmed)) return prev;
+      const updated = [...prev, trimmed];
+      saveCustomCategories(updated);
+      return updated;
+    });
+  }, []);
+
+  // Helper to commit boardKey to URL and storage
+  const commitBoardKey = useCallback((key: string | null) => {
     try {
-      window.localStorage.setItem('campussprint_active_board', sanitized);
       const url = new URL(window.location.href);
-      if (sanitized === DEFAULT_BOARD_KEY) {
-        url.searchParams.delete('board');
+      if (key) {
+        window.localStorage.setItem(BOARD_KEY_STORAGE, key);
+        url.searchParams.set('board', key);
       } else {
-        url.searchParams.set('board', sanitized);
+        window.localStorage.removeItem(BOARD_KEY_STORAGE);
+        url.searchParams.delete('board');
       }
       window.history.replaceState({}, '', url.toString());
     } catch {
@@ -160,8 +245,64 @@ export function useTasks(): UseTasksReturn {
     }
   }, []);
 
+  // 1. Create a brand new auto board
+  const createAutoBoard = useCallback(() => {
+    const newKey = generateRandomBoardKey();
+    console.log(`[useTasks] Generating new board key: "${newKey}"`);
+    commitBoardKey(newKey);
+    setBoardKeyState(newKey);
+
+    // Seed initial dummy tasks for friendly onboarding
+    const initialTasks = createInitialSeedTasks();
+    saveLocalTasks(newKey, initialTasks);
+    setTasksState(initialTasks);
+
+    // Sync seed tasks to Supabase if configured
+    if (supabase && isSupabaseConfigured) {
+      setSyncStatus('syncing');
+      const seedPayloads = initialTasks.map((t) => toSupabasePayload(t, newKey));
+      (async () => {
+        try {
+          const { error } = await supabase.from(TABLE_NAME).insert(seedPayloads);
+          if (error) {
+            console.error('[useTasks] Error inserting initial seed tasks:', error);
+            setSyncStatus('error');
+          } else {
+            setSyncStatus('synced');
+          }
+        } catch {
+          setSyncStatus('offline');
+        }
+      })();
+    }
+
+    return newKey;
+  }, [commitBoardKey]);
+
+  // 2. Select / Join an existing board
+  const selectBoard = useCallback((key: string) => {
+    const cleanKey = key.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    if (!cleanKey) return;
+    console.log(`[useTasks] Loading existing board key: "${cleanKey}"`);
+    commitBoardKey(cleanKey);
+    setBoardKeyState(cleanKey);
+  }, [commitBoardKey]);
+
+  // 3. Leave / Change current board
+  const leaveBoard = useCallback(() => {
+    console.log('[useTasks] Leaving current board...');
+    commitBoardKey(null);
+    setBoardKeyState(null);
+    setTasksState([]);
+  }, [commitBoardKey]);
+
   // Fetch tasks from Supabase when boardKey changes
   useEffect(() => {
+    if (!boardKey) {
+      setTasksState([]);
+      return;
+    }
+
     // 1. Instantly load from local storage cache (0ms delay)
     const cached = loadLocalTasks(boardKey);
     setTasksState(cached);
@@ -176,7 +317,7 @@ export function useTasks(): UseTasksReturn {
     setSyncStatus('syncing');
 
     async function fetchCloudTasks() {
-      if (!supabase) return;
+      if (!supabase || !boardKey) return;
       console.log(`[useTasks] Fetching tasks from Supabase table "${TABLE_NAME}" for board_key = "${boardKey}"...`);
 
       try {
@@ -206,34 +347,33 @@ export function useTasks(): UseTasksReturn {
         console.log(`[useTasks] Supabase SELECT Success. Loaded ${data?.length ?? 0} tasks for board "${boardKey}".`, data);
 
         if (isMounted && data) {
-          if (data.length > 0) {
-            const mapped: Task[] = data.map((row: any) => ({
+          const mapped: Task[] = data.map((row: any) => {
+            const parsed = deserializeDescription(row.description);
+            // If the row directly has a category column, prefer that, else fallback to parsed
+            const category = row.category || parsed.category || 'General';
+            return {
               id: String(row.id),
               title: row.title || 'Untitled',
-              description: row.description || undefined,
+              description: parsed.description,
               priority: (row.priority as Priority) || 'MEDIUM',
               status: (row.status as TaskStatus) || 'TODO',
               dueDate: row.due_date || row.dueDate || undefined,
-              category: row.category || undefined,
+              category: category,
               boardKey: row.board_key || boardKey,
               createdAt: typeof row.created_at === 'number'
                 ? row.created_at
                 : (row.created_at ? new Date(row.created_at).getTime() : Date.now()),
-            }));
+            };
+          });
 
-            setTasksState(mapped);
-            saveLocalTasks(boardKey, mapped);
-          } else if (cached.length > 0 && boardKey === DEFAULT_BOARD_KEY) {
-            // Seed cloud with initial data if remote is empty
-            console.log('[useTasks] Cloud board is empty. Seeding initial tasks to Supabase...');
-            const seedPayloads = cached.map((c) => toSupabasePayload(c, boardKey));
-            const { error: seedError } = await supabase.from(TABLE_NAME).insert(seedPayloads);
-            if (seedError) {
-              console.error('[useTasks] Error seeding tasks to Supabase:', seedError);
-            } else {
-              console.log('[useTasks] Successfully seeded initial tasks to Supabase.');
-            }
-          }
+          setTasksState(mapped);
+          saveLocalTasks(boardKey, mapped);
+
+          // Auto-register any new categories found in remote data into custom categories
+          mapped.forEach((t) => {
+            if (t.category) registerCategory(t.category);
+          });
+
           setSyncStatus('synced');
         }
       } catch (err: any) {
@@ -247,11 +387,13 @@ export function useTasks(): UseTasksReturn {
     return () => {
       isMounted = false;
     };
-  }, [boardKey]);
+  }, [boardKey, registerCategory]);
 
   // Sync to localStorage whenever tasks state updates
   useEffect(() => {
-    saveLocalTasks(boardKey, tasks);
+    if (boardKey) {
+      saveLocalTasks(boardKey, tasks);
+    }
   }, [boardKey, tasks]);
 
   // ── OPTIMISTIC ACTIONS ──────────────────────────────────────────
@@ -260,15 +402,21 @@ export function useTasks(): UseTasksReturn {
   const addTask = useCallback(
     (payload: Omit<Task, 'id' | 'createdAt' | 'status'>) => {
       const currentBoard = boardKeyRef.current;
+      if (!currentBoard) return;
+
+      const category = (payload.category || 'General').trim();
+      registerCategory(category);
+
       const newTask: Task = {
         ...payload,
+        category,
         id: generateId(),
         status: 'TODO',
         boardKey: currentBoard,
         createdAt: Date.now(),
       };
 
-      console.log(`[useTasks] Optimistically adding task "${newTask.title}" (id: ${newTask.id}) to board "${currentBoard}"...`);
+      console.log(`[useTasks] Optimistically adding task "${newTask.title}" [${newTask.category}] to board "${currentBoard}"...`);
 
       // 1. Optimistic Local Update (0ms)
       setTasksState((prev) => {
@@ -282,33 +430,18 @@ export function useTasks(): UseTasksReturn {
         setSyncStatus('syncing');
         const dbPayload = toSupabasePayload(newTask, currentBoard);
 
-        console.log(`[useTasks] Sending INSERT to table "${TABLE_NAME}"...`, dbPayload);
-
         (async () => {
           try {
-            const { data, error, status, statusText } = await supabase
+            const { data, error } = await supabase
               .from(TABLE_NAME)
               .insert([dbPayload])
               .select();
 
             if (error) {
-              console.error(
-                `%c[useTasks] Supabase INSERT FAILED on table "${TABLE_NAME}":%c`,
-                'color: #ef4444; font-weight: bold;',
-                'color: inherit;',
-                {
-                  message: error.message,
-                  details: error.details,
-                  hint: error.hint,
-                  code: error.code,
-                  httpStatus: status,
-                  statusText: statusText,
-                  payload: dbPayload,
-                }
-              );
+              console.error(`[useTasks] Supabase INSERT FAILED on table "${TABLE_NAME}":`, error);
               setSyncStatus('error');
             } else {
-              console.log(`%c[useTasks] Supabase INSERT SUCCESS for task "${newTask.id}"!%c`, 'color: #10b981; font-weight: bold;', 'color: inherit;', data);
+              console.log(`[useTasks] Supabase INSERT SUCCESS for task "${newTask.id}"!`, data);
               setSyncStatus('synced');
             }
           } catch (err: any) {
@@ -316,16 +449,15 @@ export function useTasks(): UseTasksReturn {
             setSyncStatus('offline');
           }
         })();
-      } else {
-        console.warn(`[useTasks] Task created in LocalStorage only (Supabase client not configured: URL=${supabaseUrl})`);
       }
     },
-    []
+    [registerCategory]
   );
 
   // Move Task Status
   const moveTaskStatus = useCallback((id: string, direction: 'forward' | 'backward') => {
     const currentBoard = boardKeyRef.current;
+    if (!currentBoard) return;
     let targetStatus: TaskStatus | null = null;
 
     // 1. Optimistic Local Update (0ms)
@@ -351,23 +483,16 @@ export function useTasks(): UseTasksReturn {
     // 2. Background Cloud Sync
     if (targetStatus && supabase && isSupabaseConfigured) {
       setSyncStatus('syncing');
-      console.log(`[useTasks] Sending UPDATE status=${targetStatus} to table "${TABLE_NAME}" for task "${id}"...`);
-
       (async () => {
         try {
-          const { error, status, statusText } = await supabase
+          const { error } = await supabase
             .from(TABLE_NAME)
             .update({ status: targetStatus })
             .eq('id', id)
             .eq('board_key', currentBoard);
 
           if (error) {
-            console.error(
-              `%c[useTasks] Supabase UPDATE status FAILED:%c`,
-              'color: #ef4444; font-weight: bold;',
-              'color: inherit;',
-              { message: error.message, details: error.details, code: error.code, status, statusText }
-            );
+            console.error(`[useTasks] Supabase UPDATE status FAILED:`, error);
             setSyncStatus('error');
           } else {
             console.log(`[useTasks] Supabase UPDATE status SUCCESS for task "${id}".`);
@@ -384,6 +509,7 @@ export function useTasks(): UseTasksReturn {
   // Update Task Priority
   const updateTaskPriority = useCallback((id: string) => {
     const currentBoard = boardKeyRef.current;
+    if (!currentBoard) return;
     let targetPriority: Priority | null = null;
 
     // 1. Optimistic Local Update (0ms)
@@ -400,23 +526,16 @@ export function useTasks(): UseTasksReturn {
     // 2. Background Cloud Sync
     if (targetPriority && supabase && isSupabaseConfigured) {
       setSyncStatus('syncing');
-      console.log(`[useTasks] Sending UPDATE priority=${targetPriority} to table "${TABLE_NAME}" for task "${id}"...`);
-
       (async () => {
         try {
-          const { error, status, statusText } = await supabase
+          const { error } = await supabase
             .from(TABLE_NAME)
             .update({ priority: targetPriority })
             .eq('id', id)
             .eq('board_key', currentBoard);
 
           if (error) {
-            console.error(
-              `%c[useTasks] Supabase UPDATE priority FAILED:%c`,
-              'color: #ef4444; font-weight: bold;',
-              'color: inherit;',
-              { message: error.message, details: error.details, code: error.code, status, statusText }
-            );
+            console.error(`[useTasks] Supabase UPDATE priority FAILED:`, error);
             setSyncStatus('error');
           } else {
             console.log(`[useTasks] Supabase UPDATE priority SUCCESS for task "${id}".`);
@@ -433,8 +552,7 @@ export function useTasks(): UseTasksReturn {
   // Delete Task
   const deleteTask = useCallback((id: string) => {
     const currentBoard = boardKeyRef.current;
-
-    console.log(`[useTasks] Optimistically deleting task "${id}" from board "${currentBoard}"...`);
+    if (!currentBoard) return;
 
     // 1. Optimistic Local Update (0ms)
     setTasksState((prev) => {
@@ -446,23 +564,16 @@ export function useTasks(): UseTasksReturn {
     // 2. Background Cloud Sync
     if (supabase && isSupabaseConfigured) {
       setSyncStatus('syncing');
-      console.log(`[useTasks] Sending DELETE to table "${TABLE_NAME}" for task "${id}"...`);
-
       (async () => {
         try {
-          const { error, status, statusText } = await supabase
+          const { error } = await supabase
             .from(TABLE_NAME)
             .delete()
             .eq('id', id)
             .eq('board_key', currentBoard);
 
           if (error) {
-            console.error(
-              `%c[useTasks] Supabase DELETE FAILED:%c`,
-              'color: #ef4444; font-weight: bold;',
-              'color: inherit;',
-              { message: error.message, details: error.details, code: error.code, status, statusText }
-            );
+            console.error(`[useTasks] Supabase DELETE FAILED:`, error);
             setSyncStatus('error');
           } else {
             console.log(`[useTasks] Supabase DELETE SUCCESS for task "${id}".`);
@@ -476,48 +587,25 @@ export function useTasks(): UseTasksReturn {
     }
   }, []);
 
-  // Reset Tasks
-  const resetTasks = useCallback(() => {
-    const currentBoard = boardKeyRef.current;
-    console.log(`[useTasks] Resetting tasks for board "${currentBoard}"...`);
-    setTasksState(SEED_TASKS);
-    saveLocalTasks(currentBoard, SEED_TASKS);
-
-    if (supabase && isSupabaseConfigured) {
-      setSyncStatus('syncing');
-      (async () => {
-        try {
-          await supabase.from(TABLE_NAME).delete().eq('board_key', currentBoard);
-          const seedPayloads = SEED_TASKS.map((item) => toSupabasePayload(item, currentBoard));
-          const { error } = await supabase.from(TABLE_NAME).insert(seedPayloads);
-          if (error) {
-            console.error('[useTasks] Reset seed insert error:', error);
-            setSyncStatus('error');
-          } else {
-            console.log('[useTasks] Reset complete.');
-            setSyncStatus('synced');
-          }
-        } catch (err) {
-          console.error('[useTasks] Exception during reset:', err);
-          setSyncStatus('offline');
-        }
-      })();
-    }
-  }, []);
-
+  // Filter tasks by both priority and category
   const filteredTasks = useMemo<Task[]>(() => {
-    const base =
-      priorityFilter === 'ALL'
-        ? tasks
-        : tasks.filter((t) => t.priority === priorityFilter);
+    let result = tasks;
+
+    if (priorityFilter !== 'ALL') {
+      result = result.filter((t) => t.priority === priorityFilter);
+    }
+
+    if (categoryFilter !== 'ALL') {
+      result = result.filter((t) => t.category.toLowerCase() === categoryFilter.toLowerCase());
+    }
 
     const PRIORITY_RANK: Record<Priority, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
-    return [...base].sort((a, b) => {
+    return [...result].sort((a, b) => {
       const rankDiff = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
       if (rankDiff !== 0) return rankDiff;
       return b.createdAt - a.createdAt;
     });
-  }, [tasks, priorityFilter]);
+  }, [tasks, priorityFilter, categoryFilter]);
 
   const progress = useMemo<ProgressStats>(() => {
     const doneCount = tasks.filter((t) => t.status === 'DONE').length;
@@ -547,17 +635,22 @@ export function useTasks(): UseTasksReturn {
     tasks,
     filteredTasks,
     priorityFilter,
+    categoryFilter,
+    availableCategories,
     boardKey,
     syncStatus,
     storageError,
     progress,
     countByStatus,
-    setBoardKey,
+    createAutoBoard,
+    selectBoard,
+    leaveBoard,
     addTask,
     moveTaskStatus,
     updateTaskPriority,
     deleteTask,
     setPriorityFilter,
-    resetTasks,
+    setCategoryFilter,
+    registerCategory,
   };
 }

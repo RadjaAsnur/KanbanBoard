@@ -1,5 +1,5 @@
 // ============================================================
-// Task type definitions — matches PRD §4 Technical Specifications
+// Task type definitions — Dynamic categories & priority types
 // ============================================================
 
 export type Priority = 'HIGH' | 'MEDIUM' | 'LOW';
@@ -13,10 +13,18 @@ export interface Task {
   priority: Priority;
   status: TaskStatus;
   dueDate?: string;
-  category?: string;
+  category: string; // Dynamic custom category string
   boardKey?: string;
   createdAt: number;
 }
+
+// ── Default Category Suggestions ─────────────────────────────
+export const DEFAULT_CATEGORIES: string[] = [
+  'Academic',
+  'Coding',
+  'Organization',
+  'Personal',
+];
 
 // ── Derived helpers ──────────────────────────────────────────
 
@@ -46,9 +54,6 @@ export const PRIORITY_LABELS: Record<Priority, string> = {
 
 /**
  * Tailwind classes for WCAG AA-compliant priority badges (contrast > 4.5:1)
- * High: Crimson/Red (#991B1B on #FEE2E2)
- * Medium: Amber (#92400E on #FEF3C7)
- * Low: Emerald (#065F46 on #D1FAE5)
  */
 export const PRIORITY_STYLES: Record<
   Priority,

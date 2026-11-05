@@ -1,9 +1,9 @@
-// TaskCard.tsx — Mobile-optimized task card with micro-interaction state changes
-// Features: Universal Delete button across all statuses + Interactive Priority Toggle
+// TaskCard.tsx — Mobile-optimized task card with dynamic category visual badge
+// Features: Universal Delete button + Interactive Priority Toggle + Clean Category Pill
 // Adheres to WCAG AA color contrast (High, Medium, Low badges) and 44x44px min tap targets
 
 import { useState } from 'react';
-import { ArrowLeft, ArrowRight, Calendar, Check, Trash2, Undo2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Calendar, Check, Trash2, Undo2, Tag } from 'lucide-react';
 import type { Task } from '../types/task';
 import { PRIORITY_LABELS, PRIORITY_STYLES, NEXT_PRIORITY_CYCLE } from '../types/task';
 
@@ -63,37 +63,42 @@ export function TaskCard({ task, onMove, onTogglePriority, onDeleteRequest }: Ta
         ${isDone ? 'opacity-80 bg-[#fcfdfe]' : ''}
         hover:shadow-md
       `}
-      aria-label={`Task: ${task.title}, priority ${PRIORITY_LABELS[task.priority]}`}
+      aria-label={`Task: ${task.title}, category ${task.category}, priority ${PRIORITY_LABELS[task.priority]}`}
     >
-      {/* Top Meta: Interactive Priority Toggle Button + Category / Module + Due Date */}
+      {/* Top Meta: Interactive Priority Toggle + Dynamic Category Badge + Due Date */}
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          {/* Interactive Priority Toggle Badge — Min 44x32px mobile-friendly tap area */}
+        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+          {/* Interactive Priority Toggle Badge */}
           <button
             type="button"
             onClick={() => onTogglePriority(task.id)}
             className={`
-              inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold tracking-wider uppercase
-              min-h-[34px] min-w-[70px] justify-center transition-all duration-150 active:scale-95 cursor-pointer
+              inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold tracking-wider uppercase
+              min-h-[28px] justify-center transition-all duration-150 active:scale-95 cursor-pointer
               ${priorityStyle.badge} hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-slate-400
             `}
             title={`Current: ${PRIORITY_LABELS[task.priority]}. Tap to switch to ${PRIORITY_LABELS[nextPriority]}`}
             aria-label={`Priority: ${PRIORITY_LABELS[task.priority]}. Tap to change priority to ${PRIORITY_LABELS[nextPriority]}`}
           >
-            <span className={`w-2 h-2 rounded-full shrink-0 ${priorityStyle.dot}`} />
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityStyle.dot}`} />
             <span>{PRIORITY_LABELS[task.priority]}</span>
           </button>
 
+          {/* Dynamic Category Badge with clean styling */}
           {task.category && (
-            <span className="px-2 py-1 rounded-md text-[11px] font-medium bg-[#eceef0] text-[#505f76] truncate font-mono">
-              {task.category}
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-[#f2f4f6] text-[#38485d] border border-[#e0e3e5] truncate max-w-[140px]"
+              title={`Category: ${task.category}`}
+            >
+              <Tag size={10} className="text-[#505f76] shrink-0" />
+              <span className="truncate">{task.category}</span>
             </span>
           )}
         </div>
 
         {dueLabel && (
-          <div className="flex items-center gap-1 text-[#505f76] text-[12px] shrink-0 font-medium">
-            <Calendar size={13} aria-hidden="true" />
+          <div className="flex items-center gap-1 text-[#505f76] text-[11px] shrink-0 font-medium">
+            <Calendar size={12} aria-hidden="true" />
             <span>{dueLabel}</span>
           </div>
         )}

@@ -1,9 +1,9 @@
 // AddTaskModal.tsx & Floating Action Button (+ New Task)
-// Visual fidelity: Stitch Screen 06 (New Task Modal, bottom sheet, category domain pills, priority selection)
+// Features: Dynamic Category Picker + Custom Category text input
 // UX rules: PRD §2 — Task addition completed in < 3 taps, min 44x44px touch targets
 
 import { useEffect, useRef, useState } from 'react';
-import { Calendar, Check, Plus, X } from 'lucide-react';
+import { Calendar, Check, Plus, X, Tag } from 'lucide-react';
 import type { Task, Priority } from '../types/task';
 import { PRIORITY_LABELS, PRIORITY_STYLES } from '../types/task';
 
@@ -11,12 +11,12 @@ type TaskPayload = Omit<Task, 'id' | 'createdAt' | 'status'>;
 
 interface AddTaskModalProps {
   isOpen: boolean;
+  availableCategories: string[];
   onOpen: () => void;
   onClose: () => void;
   onAdd: (payload: TaskPayload) => void;
 }
 
-const CATEGORIES = ['CS-301', 'UI/UX', 'Frontend', 'Backend', 'DevOps', 'General'];
 const PRIORITIES: Priority[] = ['HIGH', 'MEDIUM', 'LOW'];
 
 const DUE_OPTIONS = [
@@ -26,14 +26,30 @@ const DUE_OPTIONS = [
   { label: 'Next Sprint', value: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10) },
 ];
 
-export function AddTaskModal({ isOpen, onOpen, onClose, onAdd }: AddTaskModalProps) {
+export function AddTaskModal({
+  isOpen,
+  availableCategories,
+  onOpen,
+  onClose,
+  onAdd,
+}: AddTaskModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<Priority>('HIGH');
-  const [category, setCategory] = useState('UI/UX');
+  const [selectedCategory, setSelectedCategory] = useState<string>('Academic');
+  const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
+  const [newCategoryInput, setNewCategoryInput] = useState('');
   const [dueDate, setDueDate] = useState(DUE_OPTIONS[1].value);
 
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const newCatInputRef = useRef<HTMLInputElement>(null);
+
+  // Set default initial category if available
+  useEffect(() => {
+    if (availableCategories.length > 0 && !availableCategories.includes(selectedCategory)) {
+      setSelectedCategory(availableCategories[0]);
+    }
+  }, [availableCategories, selectedCategory]);
 
   useEffect(() => {
     if (isOpen) {
@@ -41,6 +57,12 @@ export function AddTaskModal({ isOpen, onOpen, onClose, onAdd }: AddTaskModalPro
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (isAddingNewCategory) {
+      newCatInputRef.current?.focus();
+    }
+  }, [isAddingNewCategory]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -56,9 +78,19 @@ export function AddTaskModal({ isOpen, onOpen, onClose, onAdd }: AddTaskModalPro
       setTitle('');
       setDescription('');
       setPriority('HIGH');
-      setCategory('UI/UX');
+      setIsAddingNewCategory(false);
+      setNewCategoryInput('');
       setDueDate(DUE_OPTIONS[1].value);
     }, 200);
+  };
+
+  const handleSaveCustomCategory = () => {
+    const trimmed = newCategoryInput.trim();
+    if (trimmed) {
+      setSelectedCategory(trimmed);
+      setIsAddingNewCategory(false);
+      setNewCategoryInput('');
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -66,11 +98,15 @@ export function AddTaskModal({ isOpen, onOpen, onClose, onAdd }: AddTaskModalPro
     const cleanTitle = title.trim();
     if (!cleanTitle) return;
 
+    const finalCategory = isAddingNewCategory && newCategoryInput.trim()
+      ? newCategoryInput.trim()
+      : selectedCategory.trim() || 'General';
+
     onAdd({
       title: cleanTitle,
       description: description.trim() || undefined,
       priority,
-      category,
+      category: finalCategory,
       dueDate,
     });
     handleClose();
@@ -134,7 +170,7 @@ export function AddTaskModal({ isOpen, onOpen, onClose, onAdd }: AddTaskModalPro
               New Sprint Task
             </h2>
             <p className="text-[12px] text-[#505f76] mt-0.5">
-              Sprint 04 · Engineering Backlog
+              Set priority, custom module category, and deadline
             </p>
           </div>
           <button
@@ -162,7 +198,7 @@ export function AddTaskModal({ isOpen, onOpen, onClose, onAdd }: AddTaskModalPro
               autoComplete="off"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Implement refresh token interceptor"
+              placeholder="e.g. Complete literature review or sprint backlog"
               className="
                 w-full min-h-[46px] px-3.5 py-2.5 rounded-xl
                 bg-[#f7f9fb] text-[#191c1e] text-[14px]
@@ -173,33 +209,90 @@ export function AddTaskModal({ isOpen, onOpen, onClose, onAdd }: AddTaskModalPro
             />
           </div>
 
-          {/* Category Chips */}
+          {/* Dynamic Category Chips + Custom Input */}
           <div className="space-y-1.5">
-            <label className="block text-[13px] font-bold text-[#191c1e]">
-              Module / Category
-            </label>
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Select category">
-              {CATEGORIES.map((cat) => {
-                const isSelected = category === cat;
-                return (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setCategory(cat)}
-                    className={`
-                      px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all min-h-[36px]
-                      ${
-                        isSelected
-                          ? 'bg-[#0f172a] text-white shadow-sm'
-                          : 'bg-[#eceef0] text-[#505f76] hover:bg-[#e0e3e5]'
-                      }
-                    `}
-                  >
-                    {cat}
-                  </button>
-                );
-              })}
+            <div className="flex items-center justify-between">
+              <label className="block text-[13px] font-bold text-[#191c1e] flex items-center gap-1.5">
+                <Tag size={13} className="text-[#505f76]" />
+                <span>Category / Context</span>
+              </label>
+              {!isAddingNewCategory && (
+                <button
+                  type="button"
+                  onClick={() => setIsAddingNewCategory(true)}
+                  className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5 py-0.5"
+                >
+                  <Plus size={12} strokeWidth={2.5} />
+                  <span>+ New Category</span>
+                </button>
+              )}
             </div>
+
+            {/* Custom Category Input if active */}
+            {isAddingNewCategory ? (
+              <div className="flex items-center gap-2 pt-1 animate-in fade-in-50 duration-150">
+                <input
+                  ref={newCatInputRef}
+                  type="text"
+                  value={newCategoryInput}
+                  onChange={(e) => setNewCategoryInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSaveCustomCategory();
+                    }
+                  }}
+                  placeholder="Type new category name..."
+                  className="
+                    flex-1 h-10 px-3 rounded-xl bg-[#f7f9fb] border border-[#0f172a]
+                    text-[13px] text-[#191c1e] focus:outline-none focus:bg-white
+                  "
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveCustomCategory}
+                  disabled={!newCategoryInput.trim()}
+                  className="h-10 px-3 rounded-xl bg-[#0f172a] text-white text-[12px] font-semibold flex items-center gap-1 disabled:opacity-40"
+                >
+                  <Check size={14} />
+                  <span>Use</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingNewCategory(false);
+                    setNewCategoryInput('');
+                  }}
+                  className="h-10 px-2.5 rounded-xl bg-[#eceef0] text-[#505f76] text-[12px] font-semibold"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              /* Chips of Available Categories */
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Select category">
+                {availableCategories.map((cat) => {
+                  const isSelected = selectedCategory.toLowerCase() === cat.toLowerCase();
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`
+                        px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all min-h-[36px]
+                        ${
+                          isSelected
+                            ? 'bg-[#0f172a] text-white shadow-sm ring-1 ring-[#0f172a]'
+                            : 'bg-[#eceef0] text-[#505f76] hover:bg-[#e0e3e5]'
+                        }
+                      `}
+                    >
+                      {cat}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Priority Level (WCAG AA Compliant) */}
@@ -273,7 +366,7 @@ export function AddTaskModal({ isOpen, onOpen, onClose, onAdd }: AddTaskModalPro
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Brief notes or acceptance criteria..."
+              placeholder="Brief notes, acceptance criteria, or links..."
               className="
                 w-full px-3.5 py-2 rounded-xl bg-[#f7f9fb] text-[#191c1e] text-[13px]
                 border border-[#e0e3e5] placeholder:text-slate-400 focus:outline-none

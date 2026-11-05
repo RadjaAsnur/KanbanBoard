@@ -1,59 +1,123 @@
-// Header.tsx — App header with progress counter, boardKey sync badge/input, and priority quick filter
-// Visual fidelity: Stitch Screen 04 ("CampusSprint Sprint 04", Synced status, Board ID input)
+// Header.tsx — Space-saving compact filter popover UI
+// Features: Minimalist trigger buttons, floating popover modal, active indicators, and reset action
 
-import { useState, useRef, useEffect } from 'react';
-import { CheckCircle2, Terminal, Layers, Check, Edit2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  CheckCircle2,
+  Terminal,
+  Copy,
+  Check,
+  LogOut,
+  ChevronDown,
+  Flame,
+  AlertCircle,
+  CheckCircle,
+  LayoutGrid,
+  Tag,
+  SlidersHorizontal,
+  X,
+  RotateCcw,
+} from 'lucide-react';
 import type { PriorityFilter, ProgressStats, SyncStatus } from '../hooks/useTasks';
 
 interface HeaderProps {
   progress: ProgressStats;
   priorityFilter: PriorityFilter;
+  categoryFilter: string;
+  availableCategories: string[];
   boardKey: string;
   syncStatus: SyncStatus;
-  onFilterChange: (f: PriorityFilter) => void;
-  onBoardKeyChange: (key: string) => void;
+  onPriorityFilterChange: (f: PriorityFilter) => void;
+  onCategoryFilterChange: (cat: string) => void;
+  onLeaveBoard: () => void;
 }
 
-const FILTER_OPTIONS: { label: string; value: PriorityFilter; dotColor: string }[] = [
-  { label: 'All', value: 'ALL', dotColor: 'bg-slate-400' },
-  { label: 'High', value: 'HIGH', dotColor: 'bg-red-500' },
-  { label: 'Medium', value: 'MEDIUM', dotColor: 'bg-amber-500' },
-  { label: 'Low', value: 'LOW', dotColor: 'bg-emerald-500' },
+const PRIORITY_ITEMS: {
+  label: string;
+  value: PriorityFilter;
+  icon: typeof Flame;
+  dotColor: string;
+  badgeStyle: string;
+}[] = [
+  {
+    label: 'All Priority',
+    value: 'ALL',
+    icon: LayoutGrid,
+    dotColor: 'bg-slate-400',
+    badgeStyle: 'bg-slate-900 text-white',
+  },
+  {
+    label: 'High Priority',
+    value: 'HIGH',
+    icon: Flame,
+    dotColor: 'bg-red-500',
+    badgeStyle: 'bg-red-100 text-red-800 border border-red-300 font-bold',
+  },
+  {
+    label: 'Medium Priority',
+    value: 'MEDIUM',
+    icon: AlertCircle,
+    dotColor: 'bg-amber-500',
+    badgeStyle: 'bg-amber-100 text-amber-800 border border-amber-300 font-bold',
+  },
+  {
+    label: 'Low Priority',
+    value: 'LOW',
+    icon: CheckCircle,
+    dotColor: 'bg-emerald-500',
+    badgeStyle: 'bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold',
+  },
 ];
 
 export function Header({
   progress,
   priorityFilter,
+  categoryFilter,
+  availableCategories,
   boardKey,
   syncStatus,
-  onFilterChange,
-  onBoardKeyChange,
+  onPriorityFilterChange,
+  onCategoryFilterChange,
+  onLeaveBoard,
 }: HeaderProps) {
   const { doneCount, totalCount, percentage } = progress;
-  const [isEditingBoard, setIsEditingBoard] = useState(false);
-  const [boardInput, setBoardInput] = useState(boardKey);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [copied, setCopied] = useState(false);
+  const [activePopover, setActivePopover] = useState<'priority' | 'category' | null>(null);
 
+  const isPriorityActive = priorityFilter !== 'ALL';
+  const isCategoryActive = categoryFilter !== 'ALL';
+
+  // Close popover on Escape key
   useEffect(() => {
-    setBoardInput(boardKey);
-  }, [boardKey]);
+    if (!activePopover) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActivePopover(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activePopover]);
 
-  useEffect(() => {
-    if (isEditingBoard) {
-      inputRef.current?.focus();
-      inputRef.current?.select();
+  // Copy shareable full board URL to clipboard
+  const handleCopyLink = async () => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('board', boardKey);
+      await navigator.clipboard.writeText(url.toString());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      const input = document.createElement('input');
+      input.value = window.location.href;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
-  }, [isEditingBoard]);
-
-  const handleBoardSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const clean = boardInput.trim();
-    if (clean && clean !== boardKey) {
-      onBoardKeyChange(clean);
-    } else {
-      setBoardInput(boardKey);
-    }
-    setIsEditingBoard(false);
   };
 
   return (
@@ -78,8 +142,8 @@ export function Header({
           </div>
         </div>
 
-        {/* Sync Status Badge */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        {/* Sync Status Badge & Switch Board Button */}
+        <div className="flex items-center gap-2 shrink-0">
           <div
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#f2f4f6] border border-[#e0e3e5]"
             title={`Supabase status: ${syncStatus}`}
@@ -97,45 +161,52 @@ export function Header({
               {syncStatus}
             </span>
           </div>
+
+          <button
+            type="button"
+            onClick={onLeaveBoard}
+            className="h-8 px-2.5 rounded-lg bg-white border border-[#e0e3e5] text-[#505f76] hover:text-[#191c1e] hover:bg-[#eceef0] text-[11px] font-semibold flex items-center gap-1 active:scale-95 transition-all shadow-sm"
+            title="Leave current board or switch code"
+            aria-label="Switch or leave board"
+          >
+            <LogOut size={13} strokeWidth={2} />
+            <span className="hidden xs:inline">Switch</span>
+          </button>
         </div>
       </div>
 
-      {/* Board Key / Sync ID Pill Bar */}
+      {/* Board Key Copy Badge + Progress Counter Tag */}
       <div className="px-4 pb-2 pt-0.5 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 text-[11px] text-[#505f76] min-w-0 flex-1">
-          <Layers size={13} className="text-[#505f76] shrink-0" />
-          <span className="font-semibold uppercase tracking-wider shrink-0 text-[10px]">Board:</span>
-
-          {isEditingBoard ? (
-            <form onSubmit={handleBoardSubmit} className="flex items-center gap-1 min-w-0 flex-1">
-              <input
-                ref={inputRef}
-                type="text"
-                value={boardInput}
-                onChange={(e) => setBoardInput(e.target.value)}
-                onBlur={() => handleBoardSubmit()}
-                className="h-6 px-2 text-[11px] font-mono bg-white border border-[#0f172a] rounded text-[#191c1e] focus:outline-none w-full max-w-[140px]"
-                placeholder="board-key"
-              />
-              <button
-                type="submit"
-                className="w-6 h-6 rounded bg-[#0f172a] text-white flex items-center justify-center shrink-0 active:scale-95"
-                title="Save board key"
-              >
-                <Check size={12} strokeWidth={2.5} />
-              </button>
-            </form>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setIsEditingBoard(true)}
-              className="group flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#eceef0] hover:bg-[#e0e3e5] text-[#191c1e] font-mono font-medium text-[11px] truncate transition-colors"
-              title="Click to switch or rename board sync ID"
-            >
-              <span className="truncate">{boardKey}</span>
-              <Edit2 size={10} className="text-[#505f76] opacity-60 group-hover:opacity-100 shrink-0" />
-            </button>
-          )}
+        {/* Copy Board ID Button */}
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            className={`
+              group flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-mono text-[11px] font-medium
+              active:scale-95 transition-all
+              ${
+                copied
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                  : 'bg-white border-[#e0e3e5] text-[#191c1e] hover:bg-[#f2f4f6]'
+              }
+            `}
+            title="Tap to copy complete board share link to clipboard"
+            aria-label={`Copy board ID ${boardKey}`}
+          >
+            {copied ? (
+              <>
+                <Check size={12} strokeWidth={2.5} className="text-emerald-600" />
+                <span className="font-semibold text-emerald-700">Link Copied!</span>
+              </>
+            ) : (
+              <>
+                <span className="text-[#76777d] uppercase text-[10px] font-bold font-sans">ID:</span>
+                <span className="font-semibold truncate max-w-[130px]">{boardKey}</span>
+                <Copy size={11} className="text-[#505f76] opacity-70 group-hover:opacity-100 shrink-0" />
+              </>
+            )}
+          </button>
         </div>
 
         {/* Progress Counter Tag */}
@@ -147,7 +218,7 @@ export function Header({
       </div>
 
       {/* Accessible Progress Bar */}
-      <div className="px-4 pb-2.5">
+      <div className="px-4 pb-2">
         <div
           className="h-1.5 w-full rounded-full bg-[#e0e3e5] overflow-hidden"
           role="progressbar"
@@ -163,40 +234,230 @@ export function Header({
         </div>
       </div>
 
-      {/* Priority Quick Filter Pills */}
-      <div
-        className="px-4 pb-3 flex items-center gap-2 overflow-x-auto scrollbar-hide"
-        role="group"
-        aria-label="Filter tasks by priority"
-      >
-        <span className="text-[11px] font-semibold text-[#505f76] uppercase tracking-wider mr-1">
-          Filter:
-        </span>
-        {FILTER_OPTIONS.map(({ label, value, dotColor }) => {
-          const isActive = priorityFilter === value;
-          return (
-            <button
-              key={value}
-              type="button"
-              onClick={() => onFilterChange(value)}
-              aria-pressed={isActive}
-              className={`
-                flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-medium
-                whitespace-nowrap transition-all duration-150 active:scale-95
-                min-h-[32px] min-w-[52px] justify-center
-                ${
-                  isActive
-                    ? 'bg-[#0f172a] text-white shadow-sm ring-1 ring-[#0f172a]'
-                    : 'bg-[#eceef0] text-[#505f76] hover:bg-[#e0e3e5] hover:text-[#191c1e]'
-                }
-              `}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
-              <span>{label}</span>
-            </button>
-          );
-        })}
+      {/* Space-Saving Compact Filter Trigger Row */}
+      <div className="px-4 pb-2.5 flex items-center gap-2">
+        {/* Priority Filter Trigger */}
+        <div className="relative flex-1">
+          <button
+            type="button"
+            onClick={() => setActivePopover(activePopover === 'priority' ? null : 'priority')}
+            aria-expanded={activePopover === 'priority'}
+            className={`
+              w-full h-9 min-h-[36px] px-3 rounded-xl border text-[12px] font-semibold
+              flex items-center justify-between gap-1.5 transition-all duration-150 active:scale-98
+              ${
+                isPriorityActive
+                  ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                  : 'bg-white text-[#38485d] border-[#e0e3e5] hover:bg-[#f8fafc]'
+              }
+            `}
+          >
+            <div className="flex items-center gap-1.5 truncate">
+              {isPriorityActive ? (
+                <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+              ) : (
+                <SlidersHorizontal size={13} className="text-[#505f76] shrink-0" />
+              )}
+              <span className="truncate">
+                {isPriorityActive ? `Priority: ${priorityFilter}` : 'Priority: All'}
+              </span>
+            </div>
+            <ChevronDown
+              size={13}
+              className={`shrink-0 transition-transform duration-200 ${
+                activePopover === 'priority' ? 'rotate-180' : ''
+              } ${isPriorityActive ? 'text-white' : 'text-[#505f76]'}`}
+            />
+          </button>
+        </div>
+
+        {/* Category Filter Trigger */}
+        <div className="relative flex-1">
+          <button
+            type="button"
+            onClick={() => setActivePopover(activePopover === 'category' ? null : 'category')}
+            aria-expanded={activePopover === 'category'}
+            className={`
+              w-full h-9 min-h-[36px] px-3 rounded-xl border text-[12px] font-semibold
+              flex items-center justify-between gap-1.5 transition-all duration-150 active:scale-98
+              ${
+                isCategoryActive
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                  : 'bg-white text-[#38485d] border-[#e0e3e5] hover:bg-[#f8fafc]'
+              }
+            `}
+          >
+            <div className="flex items-center gap-1.5 truncate">
+              {isCategoryActive ? (
+                <span className="w-2 h-2 rounded-full bg-white shrink-0" />
+              ) : (
+                <Tag size={13} className="text-[#505f76] shrink-0" />
+              )}
+              <span className="truncate">
+                {isCategoryActive ? `Category: ${categoryFilter}` : 'Category: All'}
+              </span>
+            </div>
+            <ChevronDown
+              size={13}
+              className={`shrink-0 transition-transform duration-200 ${
+                activePopover === 'category' ? 'rotate-180' : ''
+              } ${isCategoryActive ? 'text-white' : 'text-[#505f76]'}`}
+            />
+          </button>
+        </div>
       </div>
+
+      {/* Floating Popover Menus with Fullscreen Backdrop (Rendered via Portal to body) */}
+      {activePopover &&
+        createPortal(
+          <div className="fixed inset-0 z-50 flex items-start justify-center pt-32 sm:pt-36 px-4">
+            {/* Fullscreen Backdrop spanning the entire viewport */}
+            <div
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-200"
+              onClick={() => setActivePopover(null)}
+              aria-hidden="true"
+            />
+
+            {/* Popover Card */}
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={activePopover === 'priority' ? 'Filter by Priority' : 'Filter by Category'}
+              className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-[#e0e3e5] p-4 z-10 animate-in zoom-in-95 fade-in duration-150"
+            >
+              {/* Popover Header */}
+              <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-[#f2f4f6]">
+                <div className="flex items-center gap-1.5">
+                  {activePopover === 'priority' ? (
+                    <>
+                      <SlidersHorizontal size={14} className="text-[#0f172a]" />
+                      <span className="text-[13px] font-bold text-[#191c1e]">Filter by Priority</span>
+                    </>
+                  ) : (
+                    <>
+                      <Tag size={14} className="text-[#0f172a]" />
+                      <span className="text-[13px] font-bold text-[#191c1e]">Filter by Category</span>
+                    </>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Reset button inside popover */}
+                  {((activePopover === 'priority' && isPriorityActive) ||
+                    (activePopover === 'category' && isCategoryActive)) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (activePopover === 'priority') onPriorityFilterChange('ALL');
+                        if (activePopover === 'category') onCategoryFilterChange('ALL');
+                        setActivePopover(null);
+                      }}
+                      className="text-[11px] font-semibold text-red-600 hover:text-red-700 flex items-center gap-0.5 active:scale-95 py-0.5 px-1.5 rounded-md hover:bg-red-50"
+                    >
+                      <RotateCcw size={11} />
+                      <span>Reset</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setActivePopover(null)}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-[#505f76] hover:bg-[#eceef0] active:scale-95"
+                    aria-label="Close popover"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Popover Content Chips */}
+              {activePopover === 'priority' && (
+                <div className="grid grid-cols-2 gap-2 pt-1" role="radiogroup">
+                  {PRIORITY_ITEMS.map(({ label, value, icon: Icon, badgeStyle }) => {
+                    const isSelected = priorityFilter === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        role="radio"
+                        aria-checked={isSelected}
+                        onClick={() => {
+                          onPriorityFilterChange(value);
+                          setActivePopover(null);
+                        }}
+                        className={`
+                          flex items-center gap-2 px-3 py-2.5 rounded-xl text-[12px] font-semibold
+                          transition-all duration-150 active:scale-95 text-left border
+                          ${
+                            isSelected
+                              ? `${badgeStyle} shadow-sm ring-2 ring-slate-900/10`
+                              : 'bg-[#f7f9fb] text-[#38485d] border-[#e0e3e5] hover:bg-white hover:border-slate-300'
+                          }
+                        `}
+                      >
+                        <Icon size={14} className="shrink-0" />
+                        <span className="truncate">{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {activePopover === 'category' && (
+                <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto py-1">
+                  {/* All Categories Pill */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onCategoryFilterChange('ALL');
+                      setActivePopover(null);
+                    }}
+                    className={`
+                      flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold
+                      transition-all active:scale-95 border
+                      ${
+                        categoryFilter === 'ALL'
+                          ? 'bg-[#0f172a] text-white border-[#0f172a] shadow-sm'
+                          : 'bg-[#f7f9fb] text-[#38485d] border-[#e0e3e5] hover:bg-white'
+                      }
+                    `}
+                  >
+                    <LayoutGrid size={13} />
+                    <span>All Categories</span>
+                  </button>
+
+                  {/* Available Categories */}
+                  {availableCategories.map((cat) => {
+                    const isSelected = categoryFilter.toLowerCase() === cat.toLowerCase();
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => {
+                          onCategoryFilterChange(cat);
+                          setActivePopover(null);
+                        }}
+                        className={`
+                          flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold
+                          transition-all active:scale-95 border
+                          ${
+                            isSelected
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm ring-1 ring-indigo-400'
+                              : 'bg-[#f7f9fb] text-[#38485d] border-[#e0e3e5] hover:bg-white'
+                          }
+                        `}
+                      >
+                        <Tag size={12} />
+                        <span className="truncate max-w-[120px]">{cat}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
     </header>
   );
 }

@@ -1,9 +1,15 @@
 // App.tsx — CampusSprint Mobile Kanban Board root
-// Features Hybrid Sync (LocalStorage + Supabase) + Optimistic Updates
+// Features Hybrid Board Selection + Dynamic Category Filter + Supabase Hybrid Sync
 
 import { useState } from 'react';
 import { useTasks } from './hooks';
-import { Header, KanbanBoard, AddTaskModal, DeleteConfirmModal } from './components';
+import {
+  Header,
+  KanbanBoard,
+  AddTaskModal,
+  DeleteConfirmModal,
+  WelcomeScreen,
+} from './components';
 import type { Task } from './types/task';
 
 export default function App() {
@@ -11,16 +17,21 @@ export default function App() {
     filteredTasks,
     countByStatus,
     priorityFilter,
+    categoryFilter,
+    availableCategories,
     boardKey,
     syncStatus,
     progress,
     storageError,
-    setBoardKey,
+    createAutoBoard,
+    selectBoard,
+    leaveBoard,
     addTask,
     moveTaskStatus,
     updateTaskPriority,
     deleteTask,
     setPriorityFilter,
+    setCategoryFilter,
   } = useTasks();
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -31,16 +42,32 @@ export default function App() {
     setTaskToDelete(null);
   };
 
+  // 1. If no board is active or saved, display the Welcome Screen (Hybrid Mode selection)
+  if (!boardKey) {
+    return (
+      <div className="app-container bg-[#f7f9fb] text-[#191c1e] min-h-screen flex flex-col antialiased selection:bg-slate-900 selection:text-white">
+        <WelcomeScreen
+          onCreateAuto={() => createAutoBoard()}
+          onJoinBoard={(key) => selectBoard(key)}
+        />
+      </div>
+    );
+  }
+
+  // 2. Active Board Kanban Workspace
   return (
     <div className="app-container bg-[#f7f9fb] text-[#191c1e] min-h-screen flex flex-col antialiased selection:bg-slate-900 selection:text-white">
-      {/* Header with App Title, Progress Counter, Board Key Sync, and Priority Filters */}
+      {/* Header with App Title, Progress Counter, Dual Filters, Board Key Copy & Switch */}
       <Header
         progress={progress}
         priorityFilter={priorityFilter}
+        categoryFilter={categoryFilter}
+        availableCategories={availableCategories}
         boardKey={boardKey}
         syncStatus={syncStatus}
-        onFilterChange={setPriorityFilter}
-        onBoardKeyChange={setBoardKey}
+        onPriorityFilterChange={setPriorityFilter}
+        onCategoryFilterChange={setCategoryFilter}
+        onLeaveBoard={leaveBoard}
       />
 
       {/* Storage Notification (Accessible alert) */}
@@ -68,6 +95,7 @@ export default function App() {
       {/* Floating Action Button & Add Task Bottom Sheet */}
       <AddTaskModal
         isOpen={isAddModalOpen}
+        availableCategories={availableCategories}
         onOpen={() => setIsAddModalOpen(true)}
         onClose={() => setIsAddModalOpen(false)}
         onAdd={addTask}
