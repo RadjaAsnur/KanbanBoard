@@ -13,6 +13,7 @@ export interface Task {
   priority: Priority;
   status: TaskStatus;
   dueDate?: string;
+  category?: string;
   createdAt: number;
 }
 
@@ -21,10 +22,10 @@ export interface Task {
 /** Ordered list of statuses for tap-to-advance logic */
 export const STATUS_ORDER: TaskStatus[] = ['TODO', 'IN_PROGRESS', 'DONE'];
 
-/** Human-readable labels for each status column */
+/** Human-readable labels for each status column (English) */
 export const STATUS_LABELS: Record<TaskStatus, string> = {
-  TODO: 'To Do',
-  IN_PROGRESS: 'In Progress',
+  TODO: 'To do',
+  IN_PROGRESS: 'In progress',
   DONE: 'Done',
 };
 
@@ -35,22 +36,29 @@ export const PRIORITY_LABELS: Record<Priority, string> = {
   LOW: 'Low',
 };
 
-/** Tailwind class sets for WCAG AA-compliant priority badges */
+/**
+ * Tailwind classes for WCAG AA-compliant priority badges (contrast > 4.5:1)
+ * High: Crimson/Red (#991B1B on #FEE2E2)
+ * Medium: Amber (#92400E on #FEF3C7)
+ * Low: Emerald (#065F46 on #D1FAE5)
+ */
 export const PRIORITY_STYLES: Record<
   Priority,
-  { badge: string; border: string }
+  { badge: string; border: string; dot: string }
 > = {
   HIGH: {
-    badge: 'bg-red-100 text-red-800 border border-red-300',
-    border: 'border-l-red-500',
+    badge: 'bg-[#FEE2E2] text-[#991B1B] border border-red-200/80',
+    border: 'border-l-[#EF4444]',
+    dot: 'bg-[#EF4444]',
   },
   MEDIUM: {
-    badge: 'bg-amber-100 text-amber-800 border border-amber-300',
-    border: 'border-l-amber-400',
+    badge: 'bg-[#FEF3C7] text-[#92400E] border border-amber-200/80',
+    border: 'border-l-[#F59E0B]',
+    dot: 'bg-[#F59E0B]',
   },
   LOW: {
-    badge: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
-    border: 'border-l-emerald-500',
+    badge: 'bg-[#D1FAE5] text-[#065F46] border border-emerald-200/80',
+    border: 'border-l-[#10B981]',
+    dot: 'bg-[#10B981]',
   },
 };
-
